@@ -11,7 +11,7 @@ class Settings:
 
     # LLM
     GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-    LLM_MODEL = "llama-3.3-70b-versatile"
+    LLM_MODEL = "openai/gpt-oss-20b"
 
     # Database
     SUPABASE_URL = os.getenv("SUPABASE_URL")
