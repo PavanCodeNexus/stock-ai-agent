@@ -50,43 +50,51 @@ class MarketData:
         except Exception as e:
             return {"error": str(e), "symbol": symbol}
 
-    @staticmethod
-    def get_historical_data(
-        symbol: str,
-        period: str = "3mo"
-    ) -> dict:
-        """
-        Get historical price data
-        period: 1d, 5d, 1mo, 3mo, 6mo, 1y
-        """
-        try:
-            ticker = yf.Ticker(MarketData.get_symbol(symbol))
-            df = ticker.history(period=period)
+@staticmethod
+def get_historical_data(
+    symbol: str,
+    period: str = "3mo"
+) -> dict:
+    """Get historical price data"""
+    try:
+        # Map period values
+        period_map = {
+            "1mo": "1mo",
+            "3mo": "3mo", 
+            "6mo": "6mo",
+            "1y": "1y",
+            "2y": "2y",
+            "5y": "5y",
+            "max": "max"
+        }
+        mapped_period = period_map.get(period, "3mo")
 
-            if df.empty:
-                return {"error": "No data found", "symbol": symbol}
+        ticker = yf.Ticker(MarketData.get_symbol(symbol))
+        df = ticker.history(period=mapped_period)
 
-            # Format for frontend charts
-            history = []
-            for date, row in df.iterrows():
-                history.append({
-                    "date": date.strftime("%Y-%m-%d"),
-                    "open": round(row["Open"], 2),
-                    "high": round(row["High"], 2),
-                    "low": round(row["Low"], 2),
-                    "close": round(row["Close"], 2),
-                    "volume": int(row["Volume"])
-                })
+        if df.empty:
+            return {"error": "No data found", "symbol": symbol}
 
-            return {
-                "symbol": symbol.upper(),
-                "period": period,
-                "data": history,
-                "total_records": len(history)
-            }
+        history = []
+        for date, row in df.iterrows():
+            history.append({
+                "date": date.strftime("%Y-%m-%d"),
+                "open": round(float(row["Open"]), 2),
+                "high": round(float(row["High"]), 2),
+                "low": round(float(row["Low"]), 2),
+                "close": round(float(row["Close"]), 2),
+                "volume": int(row["Volume"])
+            })
 
-        except Exception as e:
-            return {"error": str(e), "symbol": symbol}
+        return {
+            "symbol": symbol.upper(),
+            "period": period,
+            "data": history,
+            "total_records": len(history)
+        }
+
+    except Exception as e:
+        return {"error": str(e), "symbol": symbol}
 
     @staticmethod
     def get_multiple_stocks(symbols: list) -> list:
