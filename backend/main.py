@@ -1,9 +1,9 @@
 # backend/main.py
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from core.config import settings
 from api.routes.market import router as market_router
+from api.routes.analysis import router as analysis_router
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -13,14 +13,15 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Register routes
+# Routes
 app.include_router(market_router)
+app.include_router(analysis_router)
 
 @app.get("/")
 async def root():
