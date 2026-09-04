@@ -1,20 +1,30 @@
 # data/market_data.py
 
 import yfinance as yf
-import pandas as pd
-from datetime import datetime, timedelta
+import math
+from datetime import datetime
 from typing import Optional
+
 
 class MarketData:
 
     @staticmethod
     def get_symbol(symbol: str) -> str:
         """Convert plain symbol to NSE format"""
-        # TCS → TCS.NS (NSE)
-        # RELIANCE → RELIANCE.NS
         if not symbol.endswith(".NS") and not symbol.endswith(".BO"):
             return f"{symbol.upper()}.NS"
         return symbol.upper()
+
+    @staticmethod
+    def _clean_value(val) -> Optional[float]:
+        """Clean a float value - return None if invalid"""
+        try:
+            f = float(val)
+            if math.isnan(f) or math.isinf(f):
+                return None
+            return f
+        except Exception:
+            return None
 
     @staticmethod
     def get_current_price(symbol: str) -> dict:
@@ -23,82 +33,140 @@ class MarketData:
             ticker = yf.Ticker(MarketData.get_symbol(symbol))
             info = ticker.info
 
+            current_price = (
+                info.get("currentPrice") or
+                info.get("regularMarketPrice") or
+                info.get("previousClose") or 0
+            )
+            previous_close = (
+                info.get("previousClose") or
+                info.get("regularMarketPreviousClose") or 0
+            )
+
+            change = round(current_price - previous_close, 2)
+            change_percent = round(
+                ((current_price - previous_close) / previous_close * 100)
+                if previous_close else 0, 2
+            )
+
             return {
                 "symbol": symbol.upper(),
                 "company_name": info.get("longName", "N/A"),
-                "current_price": info.get("currentPrice", 0),
-                "previous_close": info.get("previousClose", 0),
-                "open": info.get("open", 0),
-                "day_high": info.get("dayHigh", 0),
-                "day_low": info.get("dayLow", 0),
-                "volume": info.get("volume", 0),
+                "current_price": current_price,
+                "previous_close": previous_close,
+                "open": info.get("open") or info.get("regularMarketOpen", 0),
+                "day_high": info.get("dayHigh") or info.get("regularMarketDayHigh", 0),
+                "day_low": info.get("dayLow") or info.get("regularMarketDayLow", 0),
+                "volume": info.get("volume") or info.get("regularMarketVolume", 0),
                 "market_cap": info.get("marketCap", 0),
                 "pe_ratio": info.get("trailingPE", 0),
                 "52_week_high": info.get("fiftyTwoWeekHigh", 0),
                 "52_week_low": info.get("fiftyTwoWeekLow", 0),
-                "change": round(
-                    info.get("currentPrice", 0) -
-                    info.get("previousClose", 0), 2
-                ),
-                "change_percent": round(
-                    ((info.get("currentPrice", 0) -
-                      info.get("previousClose", 0)) /
-                     info.get("previousClose", 1)) * 100, 2
-                ),
+                "change": change,
+                "change_percent": change_percent,
                 "timestamp": datetime.now().isoformat()
             }
         except Exception as e:
             return {"error": str(e), "symbol": symbol}
 
-@staticmethod
-def get_historical_data(
-    symbol: str,
-    period: str = "3mo"
-) -> dict:
-    """Get historical price data"""
-    try:
-        # Map period values
-        period_map = {
-            "1mo": "1mo",
-            "3mo": "3mo", 
-            "6mo": "6mo",
-            "1y": "1y",
-            "2y": "2y",
-            "5y": "5y",
-            "max": "max"
-        }
-        mapped_period = period_map.get(period, "3mo")
+    @staticmethod
+    def get_historical_data(
+        symbol: str,
+        period: str = "3mo",
+        interval: str = "1d"
+    ) -> dict:
+        """
+        Get historical OHLCV data.
+        Supports intraday intervals for 1D and 1W periods.
 
-        ticker = yf.Ticker(MarketData.get_symbol(symbol))
-        df = ticker.history(period=mapped_period)
+        Valid combinations:
+        1d   / 5m   → intraday 1 day
+        5d   / 15m  → intraday 1 week
+        1mo  / 1d   → 1 month daily
+        3mo  / 1d   → 3 months daily
+        6mo  / 1d   → 6 months daily
+        1y   / 1d   → 1 year daily
+        5y   / 1d   → 5 years daily
+        max  / 1d   → max daily
+        """
+        try:
+            ticker = yf.Ticker(MarketData.get_symbol(symbol))
+            df = ticker.history(period=period, interval=interval)
 
-        if df.empty:
-            return {"error": "No data found", "symbol": symbol}
+            if df.empty:
+                return {"error": "No data found", "symbol": symbol, "data": []}
 
-        history = []
-        for date, row in df.iterrows():
-            history.append({
-                "date": date.strftime("%Y-%m-%d"),
-                "open": round(float(row["Open"]), 2),
-                "high": round(float(row["High"]), 2),
-                "low": round(float(row["Low"]), 2),
-                "close": round(float(row["Close"]), 2),
-                "volume": int(row["Volume"])
-            })
+            # Handle MultiIndex columns (yfinance sometimes returns these)
+            if hasattr(df.columns, 'levels'):
+                df.columns = df.columns.get_level_values(0)
 
-        return {
-            "symbol": symbol.upper(),
-            "period": period,
-            "data": history,
-            "total_records": len(history)
-        }
+            history = []
+            seen_times = set()
 
-    except Exception as e:
-        return {"error": str(e), "symbol": symbol}
+            for dt, row in df.iterrows():
+                try:
+                    open_val  = MarketData._clean_value(row.get("Open"))
+                    high_val  = MarketData._clean_value(row.get("High"))
+                    low_val   = MarketData._clean_value(row.get("Low"))
+                    close_val = MarketData._clean_value(row.get("Close"))
+                    vol_val   = row.get("Volume", 0)
+
+                    # Skip invalid OHLCV
+                    if any(v is None for v in [open_val, high_val, low_val, close_val]):
+                        continue
+                    if any(v <= 0 for v in [open_val, high_val, low_val, close_val]):
+                        continue
+                    if high_val < low_val:
+                        continue
+
+                    # Format time string
+                    if interval in ("1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h"):
+                        # Intraday: use ISO datetime string
+                        try:
+                            # Convert to IST-aware string
+                            ts = dt.strftime("%Y-%m-%dT%H:%M:%S")
+                        except Exception:
+                            ts = str(dt)
+                    else:
+                        ts = dt.strftime("%Y-%m-%d")
+
+                    # Remove duplicates
+                    if ts in seen_times:
+                        continue
+                    seen_times.add(ts)
+
+                    try:
+                        vol = int(vol_val) if vol_val and not math.isnan(float(vol_val)) else 0
+                    except Exception:
+                        vol = 0
+
+                    history.append({
+                        "date": ts,
+                        "open":   round(open_val,  2),
+                        "high":   round(high_val,  2),
+                        "low":    round(low_val,   2),
+                        "close":  round(close_val, 2),
+                        "volume": vol,
+                    })
+                except Exception:
+                    continue
+
+            # Sort chronologically
+            history.sort(key=lambda x: x["date"])
+
+            return {
+                "symbol":        symbol.upper(),
+                "period":        period,
+                "interval":      interval,
+                "data":          history,
+                "total_records": len(history),
+            }
+
+        except Exception as e:
+            return {"error": str(e), "symbol": symbol, "data": []}
 
     @staticmethod
     def get_multiple_stocks(symbols: list) -> list:
-        """Get current price for multiple stocks at once"""
         results = []
         for symbol in symbols:
             data = MarketData.get_current_price(symbol)
@@ -107,58 +175,58 @@ def get_historical_data(
 
     @staticmethod
     def get_market_overview() -> dict:
-        """Get NSE market overview - Nifty 50 and Sensex"""
         try:
-            nifty = yf.Ticker("^NSEI")
+            nifty  = yf.Ticker("^NSEI")
             sensex = yf.Ticker("^BSESN")
 
-            nifty_info = nifty.info
-            sensex_info = sensex.info
+            ni = nifty.info
+            se = sensex.info
+
+            def price(info):
+                return (info.get("regularMarketPrice") or
+                        info.get("currentPrice") or
+                        info.get("previousClose") or 0)
+
+            def prev(info):
+                return (info.get("regularMarketPreviousClose") or
+                        info.get("previousClose") or 0)
+
+            np_ = price(ni); nv = prev(ni)
+            sp_ = price(se); sv = prev(se)
+
+            def chg(p, v):
+                c = round(p - v, 2)
+                cp = round(((p - v) / v * 100) if v else 0, 2)
+                return c, cp
+
+            nc, ncp = chg(np_, nv)
+            sc, scp = chg(sp_, sv)
 
             return {
-                "nifty50": {
-                    "value": nifty_info.get("regularMarketPrice", 0),
-                    "change": nifty_info.get("regularMarketChange", 0),
-                    "change_percent": round(
-                        nifty_info.get("regularMarketChangePercent", 0), 2
-                    )
-                },
-                "sensex": {
-                    "value": sensex_info.get("regularMarketPrice", 0),
-                    "change": sensex_info.get("regularMarketChange", 0),
-                    "change_percent": round(
-                        sensex_info.get("regularMarketChangePercent", 0), 2
-                    )
-                },
-                "timestamp": datetime.now().isoformat()
+                "nifty50": {"value": np_, "change": nc, "change_percent": ncp},
+                "sensex":  {"value": sp_, "change": sc, "change_percent": scp},
+                "timestamp": datetime.now().isoformat(),
             }
         except Exception as e:
             return {"error": str(e)}
 
 
-# Test
+# Quick test
 if __name__ == "__main__":
     md = MarketData()
+    print("=== TCS Price ===")
+    p = md.get_current_price("TCS")
+    print(f"Price: ₹{p.get('current_price')}  Change: {p.get('change_percent')}%")
 
-    print("=" * 50)
-    print("Testing Market Data")
-    print("=" * 50)
+    print("\n=== TCS 3M Daily ===")
+    h = md.get_historical_data("TCS", "3mo", "1d")
+    print(f"Records: {h.get('total_records')}")
+    if h.get("data"):
+        print("Last:", h["data"][-1])
 
-    # Test 1 - Current price
-    print("\n1. TCS Current Price:")
-    price = md.get_current_price("TCS")
-    print(f"   Price: ₹{price.get('current_price')}")
-    print(f"   Change: {price.get('change_percent')}%")
-    print(f"   Company: {price.get('company_name')}")
-
-    # Test 2 - Historical data
-    print("\n2. TCS Historical (1 month):")
-    history = md.get_historical_data("TCS", "1mo")
-    print(f"   Records: {history.get('total_records')}")
-    print(f"   Latest: {history['data'][-1]}")
-
-    # Test 3 - Market overview
-    print("\n3. Market Overview:")
-    overview = md.get_market_overview()
-    print(f"   Nifty 50: {overview['nifty50']['value']}")
-    print(f"   Sensex: {overview['sensex']['value']}")
+    print("\n=== TCS 1D Intraday (5m) ===")
+    h2 = md.get_historical_data("TCS", "1d", "5m")
+    print(f"Records: {h2.get('total_records')}")
+    if h2.get("data"):
+        print("First:", h2["data"][0])
+        print("Last: ", h2["data"][-1])

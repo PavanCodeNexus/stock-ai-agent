@@ -137,30 +137,30 @@ export default function Home() {
           <StockChart symbol={searchedSymbol} />
         )}
 
-        {/* Price Card */}
-        {price && !price.error && (
-          <div className="bg-gray-800 border border-gray-700 rounded-lg p-5 mb-6">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-gray-400 text-sm">{price.company_name}</p>
-                <p className="text-3xl font-bold mt-1">
-                  ₹{price.current_price}
-                </p>
-                <p className={`text-sm mt-1 ${price.change_percent >= 0 ? "text-green-400" : "text-red-400"}`}>
-                  {price.change_percent >= 0 ? "▲" : "▼"}{" "}
-                  {Math.abs(price.change_percent)}% today
-                </p>
-              </div>
-              <div className="text-right text-sm text-gray-400 space-y-1">
-                <p>High: ₹{price.day_high}</p>
-                <p>Low: ₹{price.day_low}</p>
-                <p>52W H: ₹{price["52_week_high"]}</p>
-                <p>52W L: ₹{price["52_week_low"]}</p>
-                <p>Vol: {price.volume?.toLocaleString()}</p>
-              </div>
-            </div>
-          </div>
-        )}
+{/* Price Card */}
+{price && !price.error && (
+  <div className="bg-gray-800 border border-gray-700 rounded-lg p-5 mb-6">
+    <div className="flex justify-between items-start">
+      <div>
+        <p className="text-gray-400 text-sm">{price.company_name}</p>
+        <p className="text-3xl font-bold mt-1">
+          ₹{price.current_price?.toLocaleString("en-IN") ?? "N/A"}
+        </p>
+        <p className={`text-sm mt-1 ${price.change_percent >= 0 ? "text-green-400" : "text-red-400"}`}>
+          {price.change_percent >= 0 ? "▲" : "▼"}{" "}
+          {Math.abs(Number(price.change_percent)).toFixed(2)}% today
+        </p>
+      </div>
+      <div className="text-right text-sm text-gray-400 space-y-1">
+        <p>High: ₹{price.day_high?.toLocaleString("en-IN")}</p>
+        <p>Low: ₹{price.day_low?.toLocaleString("en-IN")}</p>
+        <p>52W H: ₹{price["52_week_high"]?.toLocaleString("en-IN")}</p>
+        <p>52W L: ₹{price["52_week_low"]?.toLocaleString("en-IN")}</p>
+        <p>Vol: {price.volume?.toLocaleString("en-IN")}</p>
+      </div>
+    </div>
+  </div>
+)}
 
         {/* News Panel */}
         {searchedSymbol && !loading && (
