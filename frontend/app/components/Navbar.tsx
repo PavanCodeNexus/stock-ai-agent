@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { TrendingUp, LogOut, User, LayoutDashboard, Eye, Briefcase } from "lucide-react";
+import { TrendingUp, LogOut, User, LayoutDashboard, Eye, Briefcase, Filter } from "lucide-react";   
 import { useAuth } from "../lib/AuthContext";
 
 export default function Navbar() {
@@ -47,7 +47,15 @@ export default function Navbar() {
               <Briefcase className="w-4 h-4" />
               Portfolio
             </Link>
+          <Link
+  href="/screener"
+  className="flex items-center gap-2 px-3 py-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 text-sm transition"
+>
+  <Filter className="w-4 h-4" />
+  Screener
+</Link>
           </div>
+          
         )}
 
         {/* User section */}
