@@ -3,7 +3,49 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
-import { TrendingUp, Mail, Lock, User, Eye, EyeOff } from "lucide-react";
+import {
+  TrendingUp, Mail, Lock, User,
+  Eye, EyeOff, CheckCircle2, Circle
+} from "lucide-react";
+
+function PasswordStrength({ password }: { password: string }) {
+  const checks = [
+    { label: "At least 6 characters", pass: password.length >= 6 },
+    { label: "Contains a number",     pass: /\d/.test(password)  },
+    { label: "Contains a letter",     pass: /[a-zA-Z]/.test(password) },
+  ];
+  const score = checks.filter((c) => c.pass).length;
+  const colors = ["#FF3B5C", "#FFB800", "#00FF88"];
+  const labels = ["Weak", "Fair", "Strong"];
+
+  if (!password) return null;
+
+  return (
+    <div className="mt-2 animate-fadeIn">
+      <div className="flex gap-1 mb-1.5">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="flex-1 h-1 rounded-full transition-all duration-300"
+               style={{ background: i < score ? colors[score - 1] : "var(--border-subtle)" }} />
+        ))}
+      </div>
+      <div className="flex items-center justify-between">
+        <span className="text-xs" style={{ color: score > 0 ? colors[score - 1] : "var(--text-muted)" }}>
+          {score > 0 ? labels[score - 1] : ""}
+        </span>
+        <div className="flex gap-3">
+          {checks.map(({ label, pass }) => (
+            <span key={label} className="flex items-center gap-1 text-xs"
+                  style={{ color: pass ? "#00FF88" : "var(--text-muted)" }}>
+              {pass
+                ? <CheckCircle2 className="w-3 h-3" />
+                : <Circle className="w-3 h-3" />}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function SignupPage() {
   const router = useRouter();
@@ -19,47 +61,37 @@ export default function SignupPage() {
     e.preventDefault();
     setLoading(true);
     setError("");
-
     if (password.length < 6) {
       setError("Password must be at least 6 characters");
       setLoading(false);
       return;
     }
-
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        data: { full_name: name }
-      }
+      options: { data: { full_name: name } }
     });
-
-    if (error) {
-      setError(error.message);
-      setLoading(false);
-    } else {
-      setSuccess(true);
-      setLoading(false);
-    }
+    if (error) { setError(error.message); setLoading(false); }
+    else { setSuccess(true); setLoading(false); }
   };
 
   if (success) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
-        <div className="text-center bg-gray-900 border border-gray-800 rounded-2xl p-8 max-w-md w-full">
-          <div className="w-16 h-16 bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="text-green-400 text-2xl">✅</span>
+      <div className="min-h-screen flex items-center justify-center p-6"
+           style={{ background: "var(--bg-primary)" }}>
+        <div className="glass p-10 max-w-md w-full text-center animate-scaleIn">
+          <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5"
+               style={{ background: "rgba(0,255,136,0.1)", border: "1px solid rgba(0,255,136,0.3)" }}>
+            <CheckCircle2 className="w-8 h-8" style={{ color: "var(--green)" }} />
           </div>
-          <h2 className="text-xl font-bold text-white mb-2">Check your email!</h2>
-          <p className="text-gray-400 text-sm mb-6">
-            We sent a confirmation link to <span className="text-white">{email}</span>.
+          <h2 className="text-2xl font-bold text-white mb-2">Check your email!</h2>
+          <p className="text-sm mb-6" style={{ color: "var(--text-secondary)" }}>
+            We sent a confirmation link to{" "}
+            <span className="text-white font-medium">{email}</span>.
             Click it to activate your account.
           </p>
-          <Link
-            href="/login"
-            className="bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-6 rounded-lg transition inline-block"
-          >
-            Go to Login
+          <Link href="/login" className="btn-primary inline-flex">
+            Go to Login →
           </Link>
         </div>
       </div>
@@ -67,83 +99,109 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center p-6"
+         style={{ background: "var(--bg-primary)" }}>
 
+      {/* Background blobs */}
+      <div className="fixed top-0 right-0 w-96 h-96 rounded-full blur-3xl opacity-5 pointer-events-none"
+           style={{ background: "var(--cyan)", transform: "translate(30%, -30%)" }} />
+      <div className="fixed bottom-0 left-0 w-96 h-96 rounded-full blur-3xl opacity-5 pointer-events-none"
+           style={{ background: "var(--purple)", transform: "translate(-30%, 30%)" }} />
+
+      <div className="w-full max-w-md animate-fadeIn">
         {/* Logo */}
-        <div className="flex items-center justify-center gap-3 mb-8">
-          <TrendingUp className="text-green-400 w-8 h-8" />
-          <div>
-            <h1 className="text-xl font-bold text-white">Stock AI Agent</h1>
-            <p className="text-gray-500 text-xs">Agentic AI for Indian Markets</p>
+        <div className="flex items-center justify-center gap-2 mb-8">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+               style={{ background: "var(--grad-cyan)" }}>
+            <TrendingUp className="w-4 h-4 text-black" />
           </div>
+          <span className="text-xl font-bold text-white">
+            Stock<span className="text-gradient-cyan">AI</span> Agent
+          </span>
         </div>
 
         {/* Card */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8">
-          <h2 className="text-xl font-bold text-white mb-1">Create account</h2>
-          <p className="text-gray-400 text-sm mb-6">Start analyzing Indian stocks with AI</p>
+        <div className="glass p-8 lg:p-10">
+          <h2 className="text-2xl font-bold text-white mb-1">Create account</h2>
+          <p className="text-sm mb-8" style={{ color: "var(--text-secondary)" }}>
+            Start analyzing Indian stocks with AI — free forever
+          </p>
 
-          <form onSubmit={handleSignup} className="space-y-4">
+          <form onSubmit={handleSignup} className="space-y-5">
             {/* Name */}
             <div>
-              <label className="text-sm text-gray-400 mb-1 block">Full Name</label>
+              <label className="text-sm font-medium block mb-2"
+                     style={{ color: "var(--text-secondary)" }}>
+                Full Name
+              </label>
               <div className="relative">
-                <User className="absolute left-3 top-3 w-4 h-4 text-gray-500" />
+                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4"
+                      style={{ color: "var(--text-muted)" }} />
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Pavan BC"
+                  placeholder="Your name"
                   required
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500 transition"
+                  className="input-field pl-11"
                 />
               </div>
             </div>
 
             {/* Email */}
             <div>
-              <label className="text-sm text-gray-400 mb-1 block">Email</label>
+              <label className="text-sm font-medium block mb-2"
+                     style={{ color: "var(--text-secondary)" }}>
+                Email address
+              </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-3 w-4 h-4 text-gray-500" />
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4"
+                      style={{ color: "var(--text-muted)" }} />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
                   required
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500 transition"
+                  className="input-field pl-11"
                 />
               </div>
             </div>
 
             {/* Password */}
             <div>
-              <label className="text-sm text-gray-400 mb-1 block">Password</label>
+              <label className="text-sm font-medium block mb-2"
+                     style={{ color: "var(--text-secondary)" }}>
+                Password
+              </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-3 w-4 h-4 text-gray-500" />
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4"
+                      style={{ color: "var(--text-muted)" }} />
                 <input
                   type={showPass ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Min 6 characters"
                   required
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-10 pr-10 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500 transition"
+                  className="input-field pl-11 pr-11"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPass(!showPass)}
-                  className="absolute right-3 top-3 text-gray-500 hover:text-white"
+                  className="absolute right-4 top-1/2 -translate-y-1/2"
+                  style={{ color: "var(--text-muted)" }}
                 >
                   {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+              <PasswordStrength password={password} />
             </div>
 
             {/* Error */}
             {error && (
-              <div className="bg-red-900/30 border border-red-700 rounded-lg px-4 py-3">
-                <p className="text-red-400 text-sm">{error}</p>
+              <div className="rounded-xl px-4 py-3 animate-fadeIn"
+                   style={{ background: "rgba(255,59,92,0.1)", border: "1px solid rgba(255,59,92,0.3)" }}>
+                <p className="text-sm" style={{ color: "var(--red)" }}>{error}</p>
               </div>
             )}
 
@@ -151,16 +209,33 @@ export default function SignupPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-700 text-white font-semibold py-3 rounded-lg transition"
+              className="btn-primary w-full justify-center py-3.5 text-sm"
             >
-              {loading ? "Creating account..." : "Create Account"}
+              {loading ? (
+                <span className="flex items-center gap-2">
+                  <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                  Creating account...
+                </span>
+              ) : "Create Account →"}
             </button>
+
+            <p className="text-xs text-center" style={{ color: "var(--text-muted)" }}>
+              By signing up you agree to our Terms of Service
+            </p>
           </form>
 
-          <p className="text-center text-gray-400 text-sm mt-6">
+          <div className="flex items-center gap-3 my-6">
+            <div className="flex-1 h-px" style={{ background: "var(--border-subtle)" }} />
+            <span className="text-xs" style={{ color: "var(--text-muted)" }}>or</span>
+            <div className="flex-1 h-px" style={{ background: "var(--border-subtle)" }} />
+          </div>
+
+          <p className="text-center text-sm" style={{ color: "var(--text-muted)" }}>
             Already have an account?{" "}
-            <Link href="/login" className="text-green-400 hover:underline">
-              Sign in
+            <Link href="/login"
+                  className="font-semibold"
+                  style={{ color: "var(--cyan)" }}>
+              Sign in →
             </Link>
           </p>
         </div>

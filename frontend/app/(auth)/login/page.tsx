@@ -3,7 +3,37 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
-import { TrendingUp, Mail, Lock, Eye, EyeOff } from "lucide-react";
+import {
+  TrendingUp, Mail, Lock, Eye, EyeOff,
+  BarChart2, Shield, Zap, Brain
+} from "lucide-react";
+
+const FEATURES = [
+  {
+    icon: Brain,
+    color: "#00D4FF",
+    title: "AI-Powered Analysis",
+    desc: "6 specialized agents analyze every stock"
+  },
+  {
+    icon: BarChart2,
+    color: "#00FF88",
+    title: "Live NSE/BSE Data",
+    desc: "Real-time prices, charts & indicators"
+  },
+  {
+    icon: Shield,
+    color: "#FFB800",
+    title: "Smart Risk Management",
+    desc: "Auto stop-loss & position sizing"
+  },
+  {
+    icon: Zap,
+    color: "#7B2FFF",
+    title: "Instant Screening",
+    desc: "Filter 100+ stocks in seconds"
+  },
+];
 
 export default function LoginPage() {
   const router = useRouter();
@@ -17,101 +47,192 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError("");
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) {
-      setError(error.message);
-      setLoading(false);
-    } else {
-      router.push("/dashboard");
-    }
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) { setError(error.message); setLoading(false); }
+    else router.push("/dashboard");
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen flex" style={{ background: "var(--bg-primary)" }}>
 
-        {/* Logo */}
-        <div className="flex items-center justify-center gap-3 mb-8">
-          <TrendingUp className="text-green-400 w-8 h-8" />
-          <div>
-            <h1 className="text-xl font-bold text-white">Stock AI Agent</h1>
-            <p className="text-gray-500 text-xs">Agentic AI for Indian Markets</p>
+      {/* ── Left Panel ── */}
+      <div className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 relative overflow-hidden">
+        {/* Background gradient */}
+        <div className="absolute inset-0"
+             style={{ background: "linear-gradient(135deg, #050A0E 0%, #0A1628 50%, #050A0E 100%)" }} />
+        <div className="absolute top-0 left-0 w-96 h-96 rounded-full blur-3xl opacity-10"
+             style={{ background: "var(--cyan)", transform: "translate(-50%, -50%)" }} />
+        <div className="absolute bottom-0 right-0 w-96 h-96 rounded-full blur-3xl opacity-10"
+             style={{ background: "var(--purple)", transform: "translate(50%, 50%)" }} />
+
+        {/* Content */}
+        <div className="relative z-10">
+          {/* Logo */}
+          <div className="flex items-center gap-3 mb-16">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+                 style={{ background: "var(--grad-cyan)" }}>
+              <TrendingUp className="w-5 h-5 text-black" />
+            </div>
+            <span className="text-xl font-bold text-white">
+              Stock<span className="text-gradient-cyan">AI</span> Agent
+            </span>
+          </div>
+
+          {/* Headline */}
+          <h1 className="text-4xl font-bold text-white leading-tight mb-4">
+            Invest smarter with
+            <span className="text-gradient-cyan block">AI-powered</span>
+            stock analysis
+          </h1>
+          <p className="text-base mb-12" style={{ color: "var(--text-secondary)" }}>
+            Get institutional-grade analysis for Indian markets.
+            Powered by LangGraph AI agents.
+          </p>
+
+          {/* Features */}
+          <div className="space-y-5">
+            {FEATURES.map(({ icon: Icon, color, title, desc }) => (
+              <div key={title} className="flex items-start gap-4">
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+                     style={{ background: `${color}15`, border: `1px solid ${color}30` }}>
+                  <Icon className="w-4 h-4" style={{ color }} />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-white">{title}</p>
+                  <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>{desc}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* Card */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8">
-          <h2 className="text-xl font-bold text-white mb-1">Welcome back</h2>
-          <p className="text-gray-400 text-sm mb-6">Sign in to your account</p>
+        {/* Bottom stats */}
+        <div className="relative z-10 grid grid-cols-3 gap-4">
+          {[
+            { value: "100+", label: "NSE Stocks" },
+            { value: "6",    label: "AI Agents"  },
+            { value: "Live", label: "Market Data" },
+          ].map(({ value, label }) => (
+            <div key={label} className="glass p-4 text-center">
+              <p className="text-xl font-bold text-gradient-cyan">{value}</p>
+              <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>{label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
 
-          <form onSubmit={handleLogin} className="space-y-4">
-            {/* Email */}
-            <div>
-              <label className="text-sm text-gray-400 mb-1 block">Email</label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-3 w-4 h-4 text-gray-500" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  required
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500 transition"
-                />
+      {/* ── Right Panel ── */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 lg:p-12">
+        <div className="w-full max-w-md animate-fadeIn">
+
+          {/* Mobile Logo */}
+          <div className="flex items-center justify-center gap-2 mb-8 lg:hidden">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+                 style={{ background: "var(--grad-cyan)" }}>
+              <TrendingUp className="w-4 h-4 text-black" />
+            </div>
+            <span className="text-lg font-bold text-white">
+              Stock<span className="text-gradient-cyan">AI</span> Agent
+            </span>
+          </div>
+
+          {/* Card */}
+          <div className="glass p-8 lg:p-10">
+            <h2 className="text-2xl font-bold text-white mb-1">Welcome back</h2>
+            <p className="text-sm mb-8" style={{ color: "var(--text-secondary)" }}>
+              Sign in to your account
+            </p>
+
+            <form onSubmit={handleLogin} className="space-y-5">
+              {/* Email */}
+              <div>
+                <label className="text-sm font-medium block mb-2"
+                       style={{ color: "var(--text-secondary)" }}>
+                  Email address
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4"
+                        style={{ color: "var(--text-muted)" }} />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    required
+                    className="input-field pl-11"
+                  />
+                </div>
               </div>
+
+              {/* Password */}
+              <div>
+                <label className="text-sm font-medium block mb-2"
+                       style={{ color: "var(--text-secondary)" }}>
+                  Password
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4"
+                        style={{ color: "var(--text-muted)" }} />
+                  <input
+                    type={showPass ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    className="input-field pl-11 pr-11"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPass(!showPass)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 transition-colors"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    {showPass
+                      ? <EyeOff className="w-4 h-4" />
+                      : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Error */}
+              {error && (
+                <div className="rounded-xl px-4 py-3 animate-fadeIn"
+                     style={{ background: "rgba(255,59,92,0.1)", border: "1px solid rgba(255,59,92,0.3)" }}>
+                  <p className="text-sm" style={{ color: "var(--red)" }}>{error}</p>
+                </div>
+              )}
+
+              {/* Submit */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="btn-primary w-full justify-center py-3.5 text-sm"
+              >
+                {loading ? (
+                  <span className="flex items-center gap-2">
+                    <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                    Signing in...
+                  </span>
+                ) : "Sign In →"}
+              </button>
+            </form>
+
+            {/* Divider */}
+            <div className="flex items-center gap-3 my-6">
+              <div className="flex-1 h-px" style={{ background: "var(--border-subtle)" }} />
+              <span className="text-xs" style={{ color: "var(--text-muted)" }}>or</span>
+              <div className="flex-1 h-px" style={{ background: "var(--border-subtle)" }} />
             </div>
 
-            {/* Password */}
-            <div>
-              <label className="text-sm text-gray-400 mb-1 block">Password</label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-3 w-4 h-4 text-gray-500" />
-                <input
-                  type={showPass ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-10 pr-10 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500 transition"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPass(!showPass)}
-                  className="absolute right-3 top-3 text-gray-500 hover:text-white"
-                >
-                  {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            {/* Error */}
-            {error && (
-              <div className="bg-red-900/30 border border-red-700 rounded-lg px-4 py-3">
-                <p className="text-red-400 text-sm">{error}</p>
-              </div>
-            )}
-
-            {/* Submit */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-700 text-white font-semibold py-3 rounded-lg transition"
-            >
-              {loading ? "Signing in..." : "Sign In"}
-            </button>
-          </form>
-
-          <p className="text-center text-gray-400 text-sm mt-6">
-            Don't have an account?{" "}
-            <Link href="/signup" className="text-green-400 hover:underline">
-              Sign up
-            </Link>
-          </p>
+            <p className="text-center text-sm" style={{ color: "var(--text-muted)" }}>
+              Don't have an account?{" "}
+              <Link href="/signup"
+                    className="font-semibold transition-colors"
+                    style={{ color: "var(--cyan)" }}>
+                Sign up free →
+              </Link>
+            </p>
+          </div>
         </div>
       </div>
     </div>
