@@ -5,7 +5,27 @@ from data.market_data import MarketData
 from data.news_fetcher import NewsFetcher
 from data.financials import Financials
 
+import re
+
+def validate_symbol(symbol: str) -> str:
+    """Clean and validate stock symbol"""
+    # Remove any special characters, keep only letters and numbers
+    clean = re.sub(r'[^A-Z0-9&]', '', symbol.upper().strip())
+    if not clean or len(clean) > 20:
+        raise ValueError(f"Invalid symbol: {symbol}")
+    return clean
 router = APIRouter(prefix="/api/market", tags=["Market"])
+# Update get_price endpoint:
+@router.get("/price/{symbol}")
+async def get_price(symbol: str):
+    """Get live stock price"""
+    try:
+        clean_symbol = validate_symbol(symbol)
+        return MarketData.get_current_price(clean_symbol)
+    except ValueError as e:
+        return {"error": str(e), "symbol": symbol}
+
+
 
 # ── Period → interval mapping ───────────────────────────────────────────────
 PERIOD_INTERVAL_MAP: dict[str, tuple[str, str]] = {

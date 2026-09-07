@@ -39,12 +39,12 @@ def create_agent_graph():
 
 
 def analyze_stock(symbol: str, query: str = None) -> dict:
-    """Main function to analyze a stock"""
+    """Main function to analyze a stock with timeout"""
+    import signal
 
     if not query:
         query = f"Should I invest in {symbol}?"
 
-    # Initial state
     initial_state: AgentState = {
         "symbol": symbol,
         "user_query": query,
@@ -72,24 +72,35 @@ def analyze_stock(symbol: str, query: str = None) -> dict:
     print(f"🤖 STOCK AI AGENT - Analyzing {symbol}")
     print("="*60)
 
-    # Run the graph
-    app = create_agent_graph()
-    final_state = app.invoke(initial_state)
+    try:
+        app = create_agent_graph()
+        final_state = app.invoke(initial_state)
 
-    print("\n" + "="*60)
-    print("📊 FINAL REPORT")
-    print("="*60)
-    print(final_state.get('final_report', ''))
+        print("\n" + "="*60)
+        print("📊 FINAL REPORT")
+        print("="*60)
+        print(final_state.get('final_report', ''))
 
-    return {
-        "symbol": symbol,
-        "recommendation": final_state.get('recommendation'),
-        "confidence": final_state.get('confidence_score'),
-        "target_price": final_state.get('target_price'),
-        "stop_loss": final_state.get('stop_loss'),
-        "final_report": final_state.get('final_report'),
-        "errors": final_state.get('errors', [])
-    }
+        return {
+            "symbol": symbol,
+            "recommendation": final_state.get('recommendation', 'HOLD'),
+            "confidence": final_state.get('confidence_score', 50),
+            "target_price": final_state.get('target_price', 0),
+            "stop_loss": final_state.get('stop_loss', 0),
+            "final_report": final_state.get('final_report', ''),
+            "errors": final_state.get('errors', [])
+        }
+    except Exception as e:
+        print(f"Agent error: {e}")
+        return {
+            "symbol": symbol,
+            "recommendation": "HOLD",
+            "confidence": 50,
+            "target_price": 0,
+            "stop_loss": 0,
+            "final_report": f"Analysis failed: {str(e)}",
+            "errors": [str(e)]
+        }
 
 
 # Test

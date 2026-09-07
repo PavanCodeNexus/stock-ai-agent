@@ -82,6 +82,10 @@ export default function Dashboard() {
 
     setCurrentStep(-1);
     setAnalyzing(false);
+    const analysisRes = await fetch(
+  `${API}/api/analysis/analyze-sync/${symbol}?user_id=${user?.id}`,
+  { method: "POST" }
+);
   };
 
   const recColor = (rec: string) => {
