@@ -6,7 +6,8 @@ import { supabase } from "../lib/supabase";
 import Navbar from "../components/Navbar";
 import {
   Briefcase, Plus, Trash2, TrendingUp,
-  TrendingDown, RefreshCw, X
+  TrendingDown, RefreshCw, X, Sparkles,
+  ArrowUpRight, ArrowDownRight, Wallet
 } from "lucide-react";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -25,7 +26,7 @@ interface Holding {
   loadingPrice?: boolean;
 }
 
-interface AddTradeForm {
+interface AddForm {
   symbol: string;
   quantity: string;
   buy_price: string;
@@ -38,11 +39,10 @@ export default function PortfolioPage() {
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [fetching, setFetching] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState<AddTradeForm>({
-    symbol: "", quantity: "", buy_price: ""
-  });
+  const [form, setForm] = useState<AddForm>({ symbol: "", quantity: "", buy_price: "" });
   const [adding, setAdding] = useState(false);
   const [formError, setFormError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.push("/login");
@@ -66,47 +66,46 @@ export default function PortfolioPage() {
         loadingPrice: true,
         invested_value: h.quantity * h.avg_buy_price,
       })));
-      data.forEach((h) => fetchLivePrice(h.symbol, h.quantity, h.avg_buy_price));
+      await Promise.all(
+        data.map((h) => fetchLivePrice(h.symbol, h.quantity, h.avg_buy_price))
+      );
     }
     setFetching(false);
   };
 
   const fetchLivePrice = async (
-    symbol: string,
-    quantity: number,
-    avgBuyPrice: number
+    symbol: string, quantity: number, avgBuyPrice: number
   ) => {
     try {
       const res = await fetch(`${API}/api/market/price/${symbol}`);
       const data = await res.json();
-      const currentPrice = data.current_price || 0;
-      const currentValue = currentPrice * quantity;
-      const investedValue = avgBuyPrice * quantity;
-      const pnl = currentValue - investedValue;
-      const pnlPercent = investedValue > 0 ? (pnl / investedValue) * 100 : 0;
-
+      const cp = data.current_price || 0;
+      const cv = cp * quantity;
+      const iv = avgBuyPrice * quantity;
+      const pnl = cv - iv;
+      const pnlPct = iv > 0 ? (pnl / iv) * 100 : 0;
       setHoldings((prev) =>
         prev.map((h) =>
           h.symbol === symbol
-            ? {
-                ...h,
-                current_price: currentPrice,
-                current_value: currentValue,
-                invested_value: investedValue,
-                pnl: pnl,
-                pnl_percent: pnlPercent,
-                loadingPrice: false,
-              }
+            ? { ...h, current_price: cp, current_value: cv,
+                invested_value: iv, pnl, pnl_percent: pnlPct, loadingPrice: false }
             : h
         )
       );
     } catch {
       setHoldings((prev) =>
-        prev.map((h) =>
-          h.symbol === symbol ? { ...h, loadingPrice: false } : h
-        )
+        prev.map((h) => h.symbol === symbol ? { ...h, loadingPrice: false } : h)
       );
     }
+  };
+
+  const refreshAll = async () => {
+    setRefreshing(true);
+    setHoldings((prev) => prev.map((h) => ({ ...h, loadingPrice: true })));
+    await Promise.all(
+      holdings.map((h) => fetchLivePrice(h.symbol, h.quantity, h.avg_buy_price))
+    );
+    setRefreshing(false);
   };
 
   const addHolding = async () => {
@@ -118,79 +117,45 @@ export default function PortfolioPage() {
     const quantity = parseFloat(form.quantity);
     const buyPrice = parseFloat(form.buy_price);
 
-    if (isNaN(quantity) || quantity <= 0) {
-      setFormError("Enter valid quantity");
-      setAdding(false);
-      return;
-    }
-    if (isNaN(buyPrice) || buyPrice <= 0) {
-      setFormError("Enter valid buy price");
-      setAdding(false);
-      return;
-    }
+    if (isNaN(quantity) || quantity <= 0) { setFormError("Enter valid quantity"); setAdding(false); return; }
+    if (isNaN(buyPrice) || buyPrice <= 0) { setFormError("Enter valid buy price"); setAdding(false); return; }
 
-    // Verify stock exists
     try {
       const res = await fetch(`${API}/api/market/price/${symbol}`);
       const data = await res.json();
-      if (data.error) {
-        setFormError(`${symbol} not found on NSE`);
-        setAdding(false);
-        return;
-      }
+      if (data.error) { setFormError(`${symbol} not found on NSE`); setAdding(false); return; }
 
-      // Check if holding exists — update quantity
       const { data: existing } = await supabase
-        .from("portfolio")
-        .select("*")
-        .eq("user_id", user.id)
-        .eq("symbol", symbol)
-        .single();
+        .from("portfolio").select("*")
+        .eq("user_id", user.id).eq("symbol", symbol).single();
 
       if (existing) {
-        // Calculate new average
         const totalQty = existing.quantity + quantity;
-        const newAvg = (
-          (existing.quantity * existing.avg_buy_price + quantity * buyPrice) /
-          totalQty
-        );
-
-        await supabase
-          .from("portfolio")
-          .update({
-            quantity: totalQty,
-            avg_buy_price: parseFloat(newAvg.toFixed(2)),
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", existing.id);
+        const newAvg = ((existing.quantity * existing.avg_buy_price) + (quantity * buyPrice)) / totalQty;
+        await supabase.from("portfolio").update({
+          quantity: totalQty,
+          avg_buy_price: parseFloat(newAvg.toFixed(2)),
+          updated_at: new Date().toISOString(),
+        }).eq("id", existing.id);
       } else {
         await supabase.from("portfolio").insert({
-          user_id: user.id,
-          symbol: symbol,
+          user_id: user.id, symbol,
           company_name: data.company_name || symbol,
-          quantity: quantity,
-          avg_buy_price: buyPrice,
+          quantity, avg_buy_price: buyPrice,
         });
       }
 
-      // Add to trades history
       await supabase.from("trades").insert({
-        user_id: user.id,
-        symbol: symbol,
+        user_id: user.id, symbol,
         company_name: data.company_name || symbol,
-        trade_type: "BUY",
-        quantity: quantity,
-        price: buyPrice,
+        trade_type: "BUY", quantity, price: buyPrice,
         total_amount: quantity * buyPrice,
       });
 
       setForm({ symbol: "", quantity: "", buy_price: "" });
       setShowModal(false);
       fetchPortfolio();
-    } catch {
-      setFormError("Failed to add holding");
-    }
-
+    } catch { setFormError("Failed to add holding"); }
     setAdding(false);
   };
 
@@ -199,117 +164,127 @@ export default function PortfolioPage() {
     setHoldings((prev) => prev.filter((h) => h.id !== id));
   };
 
-  // Portfolio summary
-  const totalInvested = holdings.reduce(
-    (s, h) => s + (h.invested_value || 0), 0
-  );
-  const totalCurrent = holdings.reduce(
-    (s, h) => s + (h.current_value || 0), 0
-  );
-  const totalPnL = totalCurrent - totalInvested;
-  const totalPnLPct = totalInvested > 0
-    ? (totalPnL / totalInvested) * 100
-    : 0;
+  const totalInvested = holdings.reduce((s, h) => s + (h.invested_value || 0), 0);
+  const totalCurrent  = holdings.reduce((s, h) => s + (h.current_value  || 0), 0);
+  const totalPnL      = totalCurrent - totalInvested;
+  const totalPnLPct   = totalInvested > 0 ? (totalPnL / totalInvested) * 100 : 0;
+  const isProfit      = totalPnL >= 0;
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
+  if (loading) return <Loader />;
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
+    <div className="min-h-screen" style={{ background: "var(--bg-primary)" }}>
       <Navbar />
 
       <div className="max-w-5xl mx-auto px-4 py-6">
 
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        {/* ── Header ── */}
+        <div className="flex items-center justify-between mb-6 animate-fadeIn">
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Briefcase className="text-green-400 w-6 h-6" />
+            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+              <Briefcase className="w-6 h-6" style={{ color: "var(--green)" }} />
               My Portfolio
             </h1>
-            <p className="text-gray-400 text-sm mt-1">
-              Track your stock investments
+            <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
+              Track your investments and P&L
             </p>
           </div>
           <div className="flex gap-3">
-            <button
-              onClick={fetchPortfolio}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-400 hover:text-white transition"
-            >
-              <RefreshCw className="w-4 h-4" />
+            <button onClick={refreshAll} disabled={refreshing} className="btn-secondary">
+              <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
               Refresh
             </button>
-            <button
-              onClick={() => setShowModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 rounded-lg text-sm font-medium text-white transition"
-            >
+            <button onClick={() => setShowModal(true)} className="btn-primary">
               <Plus className="w-4 h-4" />
               Add Stock
             </button>
           </div>
         </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-            <p className="text-xs text-gray-400 mb-1">Total Invested</p>
-            <p className="text-lg font-bold text-white">
-              ₹{totalInvested.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
-            </p>
-          </div>
-          <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-            <p className="text-xs text-gray-400 mb-1">Current Value</p>
-            <p className="text-lg font-bold text-white">
-              ₹{totalCurrent.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
-            </p>
-          </div>
-          <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-            <p className="text-xs text-gray-400 mb-1">Total P&L</p>
-            <p className={`text-lg font-bold ${totalPnL >= 0 ? "text-green-400" : "text-red-400"}`}>
-              {totalPnL >= 0 ? "+" : ""}₹{Math.abs(totalPnL).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
-            </p>
-          </div>
-          <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-            <p className="text-xs text-gray-400 mb-1">Returns</p>
-            <p className={`text-lg font-bold flex items-center gap-1 ${totalPnLPct >= 0 ? "text-green-400" : "text-red-400"}`}>
-              {totalPnLPct >= 0
-                ? <TrendingUp className="w-4 h-4" />
-                : <TrendingDown className="w-4 h-4" />}
-              {totalPnLPct >= 0 ? "+" : ""}{totalPnLPct.toFixed(2)}%
-            </p>
-          </div>
-        </div>
+        {/* ── Summary Hero ── */}
+        {holdings.length > 0 && (
+          <div className="glass p-6 mb-6 animate-fadeIn"
+               style={{
+                 background: isProfit
+                   ? "linear-gradient(135deg, rgba(0,255,136,0.05), rgba(13,20,33,0.8))"
+                   : "linear-gradient(135deg, rgba(255,59,92,0.05), rgba(13,20,33,0.8))",
+                 borderColor: isProfit ? "rgba(0,255,136,0.2)" : "rgba(255,59,92,0.2)",
+               }}>
+            <div className="flex flex-wrap items-center justify-between gap-6">
+              {/* Total P&L */}
+              <div>
+                <p className="text-xs uppercase tracking-widest mb-2"
+                   style={{ color: "var(--text-muted)" }}>
+                  Total P&L
+                </p>
+                <div className="flex items-center gap-3">
+                  <span className={`text-4xl font-bold number-display ${isProfit ? "positive" : "negative"}`}>
+                    {isProfit ? "+" : ""}₹{Math.abs(totalPnL).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                  </span>
+                  <div className="flex items-center gap-1 px-3 py-1 rounded-full text-sm font-bold"
+                       style={{
+                         background: isProfit ? "rgba(0,255,136,0.1)" : "rgba(255,59,92,0.1)",
+                         border: `1px solid ${isProfit ? "rgba(0,255,136,0.3)" : "rgba(255,59,92,0.3)"}`,
+                         color: isProfit ? "var(--green)" : "var(--red)",
+                       }}>
+                    {isProfit ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
+                    {isProfit ? "+" : ""}{totalPnLPct.toFixed(2)}%
+                  </div>
+                </div>
+              </div>
 
-        {/* Holdings Table */}
+              {/* Stats */}
+              <div className="flex gap-6">
+                {[
+                  { label: "Invested",      value: `₹${totalInvested.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`, icon: Wallet      },
+                  { label: "Current Value", value: `₹${totalCurrent.toLocaleString("en-IN",  { maximumFractionDigits: 0 })}`, icon: TrendingUp  },
+                  { label: "Holdings",      value: holdings.length.toString(),                                                   icon: Briefcase  },
+                ].map(({ label, value, icon: Icon }) => (
+                  <div key={label} className="text-center">
+                    <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>{label}</p>
+                    <p className="text-lg font-bold text-white number-display">{value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Holdings ── */}
         {fetching ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+          <div className="space-y-3">
+            {[1,2,3].map((i) => (
+              <div key={i} className="glass p-5">
+                <div className="flex justify-between">
+                  <div className="space-y-2">
+                    <div className="skeleton h-5 w-24" />
+                    <div className="skeleton h-3 w-40" />
+                  </div>
+                  <div className="skeleton h-8 w-32" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : holdings.length === 0 ? (
-          <div className="text-center py-20 bg-gray-800 border border-gray-700 rounded-xl">
-            <Briefcase className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-            <p className="text-gray-400 font-medium">No holdings yet</p>
-            <p className="text-gray-600 text-sm mt-1 mb-4">
+          <div className="glass p-16 text-center animate-fadeIn">
+            <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
+                 style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)" }}>
+              <Briefcase className="w-8 h-8" style={{ color: "var(--text-muted)" }} />
+            </div>
+            <p className="text-white font-semibold mb-1">No holdings yet</p>
+            <p className="text-sm mb-5" style={{ color: "var(--text-muted)" }}>
               Add your first stock to start tracking
             </p>
-            <button
-              onClick={() => setShowModal(true)}
-              className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-lg text-sm font-medium transition"
-            >
-              Add Stock
+            <button onClick={() => setShowModal(true)} className="btn-primary">
+              <Plus className="w-4 h-4" /> Add Stock
             </button>
           </div>
         ) : (
-          <div className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden">
-            {/* Header */}
-            <div className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-gray-700 text-xs text-gray-500 font-medium uppercase">
+          <div className="glass overflow-hidden animate-fadeIn">
+            {/* Table Header */}
+            <div className="grid grid-cols-12 gap-2 px-5 py-3 text-xs uppercase tracking-widest font-medium border-b"
+                 style={{ color: "var(--text-muted)", borderColor: "var(--border-subtle)" }}>
               <div className="col-span-3">Stock</div>
               <div className="col-span-1 text-right">Qty</div>
               <div className="col-span-2 text-right">Avg Cost</div>
@@ -319,132 +294,139 @@ export default function PortfolioPage() {
               <div className="col-span-1 text-right">Action</div>
             </div>
 
-            {/* Rows */}
-            {holdings.map((h) => (
-              <div
-                key={h.id}
-                className="grid grid-cols-12 gap-2 px-4 py-4 border-b border-gray-700/50 last:border-0 hover:bg-gray-700/30 transition items-center"
-              >
-                <div className="col-span-3">
-                  <p className="font-semibold text-white text-sm">{h.symbol}</p>
-                  <p className="text-xs text-gray-500 truncate">{h.company_name}</p>
-                </div>
-
-                <div className="col-span-1 text-right">
-                  <p className="text-sm text-white">{h.quantity}</p>
-                </div>
-
-                <div className="col-span-2 text-right">
-                  <p className="text-sm text-white">
-                    ₹{h.avg_buy_price.toLocaleString("en-IN")}
-                  </p>
-                </div>
-
-                <div className="col-span-2 text-right">
-                  {h.loadingPrice ? (
-                    <div className="w-16 h-4 bg-gray-700 rounded animate-pulse ml-auto" />
-                  ) : (
-                    <p className="text-sm text-white">
-                      ₹{h.current_price?.toLocaleString("en-IN") ?? "N/A"}
+            {holdings.map((h, idx) => {
+              const isP = (h.pnl ?? 0) >= 0;
+              return (
+                <div
+                  key={h.id}
+                  className="grid grid-cols-12 gap-2 px-5 py-4 border-b items-center table-row"
+                  style={{ borderColor: "var(--border-subtle)" }}
+                >
+                  <div className="col-span-3">
+                    <p className="font-bold text-white text-sm">{h.symbol}</p>
+                    <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>
+                      {h.company_name}
                     </p>
-                  )}
-                </div>
+                  </div>
 
-                <div className="col-span-2 text-right">
-                  {h.loadingPrice ? (
-                    <div className="w-16 h-4 bg-gray-700 rounded animate-pulse ml-auto" />
-                  ) : (
-                    <p className={`text-sm font-medium ${(h.pnl ?? 0) >= 0 ? "text-green-400" : "text-red-400"}`}>
-                      {(h.pnl ?? 0) >= 0 ? "+" : ""}
-                      ₹{Math.abs(h.pnl ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                  <div className="col-span-1 text-right">
+                    <p className="text-sm text-white number-display">{h.quantity}</p>
+                  </div>
+
+                  <div className="col-span-2 text-right">
+                    <p className="text-sm text-white number-display">
+                      ₹{h.avg_buy_price.toLocaleString("en-IN")}
                     </p>
-                  )}
-                </div>
+                  </div>
 
-                <div className="col-span-1 text-right">
-                  {h.loadingPrice ? (
-                    <div className="w-12 h-4 bg-gray-700 rounded animate-pulse ml-auto" />
-                  ) : (
-                    <p className={`text-xs font-medium ${(h.pnl_percent ?? 0) >= 0 ? "text-green-400" : "text-red-400"}`}>
-                      {(h.pnl_percent ?? 0) >= 0 ? "+" : ""}
-                      {(h.pnl_percent ?? 0).toFixed(1)}%
-                    </p>
-                  )}
-                </div>
+                  <div className="col-span-2 text-right">
+                    {h.loadingPrice ? (
+                      <div className="skeleton h-4 w-16 ml-auto" />
+                    ) : (
+                      <p className="text-sm text-white number-display">
+                        ₹{h.current_price?.toLocaleString("en-IN") ?? "N/A"}
+                      </p>
+                    )}
+                  </div>
 
-                <div className="col-span-1 flex justify-end">
-                  <button
-                    onClick={() => removeHolding(h.id)}
-                    className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-gray-700 rounded transition"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="col-span-2 text-right">
+                    {h.loadingPrice ? (
+                      <div className="skeleton h-4 w-16 ml-auto" />
+                    ) : (
+                      <p className={`text-sm font-semibold number-display ${isP ? "positive" : "negative"}`}>
+                        {isP ? "+" : ""}₹{Math.abs(h.pnl ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="col-span-1 text-right">
+                    {h.loadingPrice ? (
+                      <div className="skeleton h-4 w-12 ml-auto" />
+                    ) : (
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isP ? "positive" : "negative"}`}
+                            style={{ background: isP ? "rgba(0,255,136,0.1)" : "rgba(255,59,92,0.1)" }}>
+                        {isP ? "+" : ""}{(h.pnl_percent ?? 0).toFixed(1)}%
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="col-span-1 flex justify-end gap-1">
+                    <button
+                      onClick={() => router.push(`/dashboard?symbol=${h.symbol}`)}
+                      className="p-1.5 rounded-lg transition-all"
+                      style={{ color: "var(--text-muted)" }}
+                      onMouseEnter={e => { e.currentTarget.style.color = "var(--cyan)"; e.currentTarget.style.background = "rgba(0,212,255,0.08)"; }}
+                      onMouseLeave={e => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "transparent"; }}
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => removeHolding(h.id)}
+                      className="p-1.5 rounded-lg transition-all"
+                      style={{ color: "var(--text-muted)" }}
+                      onMouseEnter={e => { e.currentTarget.style.color = "var(--red)"; e.currentTarget.style.background = "rgba(255,59,92,0.08)"; }}
+                      onMouseLeave={e => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "transparent"; }}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
 
-      {/* Add Stock Modal */}
+      {/* ── Add Modal ── */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-md">
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4"
+             style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)" }}>
+          <div className="glass p-6 w-full max-w-md animate-scaleIn">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-bold text-white">Add Stock</h2>
-              <button
-                onClick={() => { setShowModal(false); setFormError(""); }}
-                className="text-gray-400 hover:text-white"
-              >
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <Plus className="w-5 h-5" style={{ color: "var(--green)" }} />
+                Add Stock
+              </h2>
+              <button onClick={() => { setShowModal(false); setFormError(""); }}
+                      className="p-1.5 rounded-lg transition-all"
+                      style={{ color: "var(--text-muted)" }}
+                      onMouseEnter={e => e.currentTarget.style.color = "white"}
+                      onMouseLeave={e => e.currentTarget.style.color = "var(--text-muted)"}>
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="space-y-4">
-              <div>
-                <label className="text-sm text-gray-400 mb-1 block">
-                  Stock Symbol
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. TCS, RELIANCE"
-                  value={form.symbol}
-                  onChange={(e) => setForm({ ...form, symbol: e.target.value.toUpperCase() })}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500 text-sm"
-                />
-              </div>
+              {[
+                { label: "Stock Symbol", placeholder: "e.g. TCS, RELIANCE", key: "symbol", type: "text" },
+                { label: "Quantity (shares)", placeholder: "e.g. 10", key: "quantity", type: "number" },
+                { label: "Buy Price (₹ per share)", placeholder: "e.g. 2200", key: "buy_price", type: "number" },
+              ].map(({ label, placeholder, key, type }) => (
+                <div key={key}>
+                  <label className="text-sm font-medium block mb-2"
+                         style={{ color: "var(--text-secondary)" }}>
+                    {label}
+                  </label>
+                  <input
+                    type={type}
+                    placeholder={placeholder}
+                    value={form[key as keyof AddForm]}
+                    onChange={(e) => setForm({
+                      ...form,
+                      [key]: key === "symbol" ? e.target.value.toUpperCase() : e.target.value
+                    })}
+                    className="input-field"
+                  />
+                </div>
+              ))}
 
-              <div>
-                <label className="text-sm text-gray-400 mb-1 block">
-                  Quantity (shares)
-                </label>
-                <input
-                  type="number"
-                  placeholder="e.g. 10"
-                  value={form.quantity}
-                  onChange={(e) => setForm({ ...form, quantity: e.target.value })}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500 text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm text-gray-400 mb-1 block">
-                  Buy Price (₹ per share)
-                </label>
-                <input
-                  type="number"
-                  placeholder="e.g. 2200"
-                  value={form.buy_price}
-                  onChange={(e) => setForm({ ...form, buy_price: e.target.value })}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-green-500 text-sm"
-                />
-              </div>
-
+              {/* Total preview */}
               {form.symbol && form.quantity && form.buy_price && (
-                <div className="bg-gray-800 rounded-lg p-3 text-sm">
-                  <div className="flex justify-between text-gray-400">
-                    <span>Total Investment</span>
-                    <span className="text-white font-medium">
+                <div className="rounded-xl p-4 animate-fadeIn"
+                     style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)" }}>
+                  <div className="flex justify-between text-sm">
+                    <span style={{ color: "var(--text-muted)" }}>Total Investment</span>
+                    <span className="text-white font-bold number-display">
                       ₹{(parseFloat(form.quantity) * parseFloat(form.buy_price)).toLocaleString("en-IN")}
                     </span>
                   </div>
@@ -452,20 +434,35 @@ export default function PortfolioPage() {
               )}
 
               {formError && (
-                <p className="text-red-400 text-sm">{formError}</p>
+                <p className="text-sm" style={{ color: "var(--red)" }}>{formError}</p>
               )}
 
               <button
                 onClick={addHolding}
                 disabled={adding || !form.symbol || !form.quantity || !form.buy_price}
-                className="w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-700 text-white font-semibold py-3 rounded-lg transition"
+                className="btn-primary w-full justify-center py-3.5"
               >
-                {adding ? "Adding..." : "Add to Portfolio"}
+                {adding ? (
+                  <span className="flex items-center gap-2">
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Adding...
+                  </span>
+                ) : "Add to Portfolio →"}
               </button>
             </div>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function Loader() {
+  return (
+    <div className="min-h-screen flex items-center justify-center"
+         style={{ background: "var(--bg-primary)" }}>
+      <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin"
+           style={{ borderColor: "var(--cyan)" }} />
     </div>
   );
 }
