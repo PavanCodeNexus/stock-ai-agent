@@ -5,8 +5,9 @@ import { useRouter, usePathname } from "next/navigation";
 import {
   TrendingUp, LayoutDashboard, Eye,
   Briefcase, Filter, LogOut, User,
-  Menu, X, ChevronDown
+  Menu, X, ChevronDown , History
 } from "lucide-react";
+
 import { useAuth } from "../lib/AuthContext";
 import TickerStrip from "./TickerStrip";
 
@@ -14,7 +15,9 @@ const NAV_LINKS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/watchlist", label: "Watchlist",  icon: Eye            },
   { href: "/portfolio", label: "Portfolio",  icon: Briefcase      },
+   { href: "/trades",    label: "Trades",     icon: History        },
   { href: "/screener",  label: "Screener",   icon: Filter         },
+  
 ];
 
 export default function Navbar() {

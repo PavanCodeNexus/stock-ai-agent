@@ -6,6 +6,7 @@ import Navbar from "../components/Navbar";
 import StockChart from "../components/StockChart";
 import NewsPanel from "../components/NewsPanel";
 import WatchlistButton from "../components/WatchlistButton";
+import SearchAutocomplete from "../components/SearchAutocomplete";
 import {
   Search, RefreshCw, TrendingUp, TrendingDown,
   Brain, Database, BarChart2, ShieldCheck,
@@ -109,30 +110,25 @@ export default function Dashboard() {
       <div className="max-w-6xl mx-auto px-4 py-6">
 
         {/* Search */}
-        <div className="mb-8 animate-fadeIn">
-          <div className="flex gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5"
-                      style={{ color: "var(--text-muted)" }} />
-              <input
-                type="text"
-                placeholder="Search NSE/BSE symbol (TCS, RELIANCE, INFY...)"
-                value={symbol}
-                onChange={(e) => setSymbol(e.target.value.toUpperCase())}
-                onKeyDown={(e) => e.key === "Enter" && analyzeStock()}
-                className="input-field pl-12 text-base"
-              />
-            </div>
-            <button
-              onClick={analyzeStock}
-              disabled={analyzing || !symbol.trim()}
-              className="btn-primary px-6 whitespace-nowrap"
-            >
-              {analyzing
-                ? <><RefreshCw className="w-4 h-4 animate-spin" />Analyzing...</>
-                : <><Sparkles className="w-4 h-4" />Analyze</>}
-            </button>
-          </div>
+<div className="mb-8 animate-fadeIn">
+  <div className="flex gap-3">
+    <SearchAutocomplete
+      value={symbol}
+      onChange={setSymbol}
+      onSelect={(s) => setSymbol(s)}
+      onSubmit={analyzeStock}
+      placeholder="Search NSE/BSE symbol (TCS, RELIANCE, INFY...)"
+    />
+    <button
+      onClick={analyzeStock}
+      disabled={analyzing || !symbol.trim()}
+      className="btn-primary px-6 whitespace-nowrap"
+    >
+      {analyzing
+        ? <><RefreshCw className="w-4 h-4 animate-spin" />Analyzing...</>
+        : <><Sparkles className="w-4 h-4" />Analyze</>}
+    </button>
+  </div>
 
           {/* Popular */}
           {!searchedSymbol && (
