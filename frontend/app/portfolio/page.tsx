@@ -293,6 +293,14 @@ export default function PortfolioPage() {
               <div className="col-span-1 text-right">Return</div>
               <div className="col-span-1 text-right">Action</div>
             </div>
+            <div className="glass overflow-hidden animate-fadeIn">
+  {/* Scrollable on mobile */}
+  <div className="scroll-x">
+    <div style={{ minWidth: "700px" }}>
+      {/* Table Header + Rows */}
+    </div>
+  </div>
+</div>
 
             {holdings.map((h, idx) => {
               const isP = (h.pnl ?? 0) >= 0;

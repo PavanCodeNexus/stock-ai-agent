@@ -4,8 +4,9 @@ import { AuthProvider } from "./lib/AuthContext";
 import MobileNav from "./components/MobileNav";
 
 export const metadata: Metadata = {
-  title: "Stock AI Agent",
-  description: "Agentic AI for Indian Stock Market",
+  title: "Stock AI Agent — AI-Powered Indian Stock Analysis",
+  description: "Analyze NSE/BSE stocks with 6 AI agents. Get BUY/SELL/HOLD recommendations with live data.",
+  viewport: "width=device-width, initial-scale=1, maximum-scale=1",
 };
 
 export default function RootLayout({
@@ -24,3 +25,7 @@ export default function RootLayout({
     </html>
   );
 }
+<body
+  className="antialiased"
+  style={{ paddingBottom: "80px" }}
+></body>

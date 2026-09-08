@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Check } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/AuthContext";
 
@@ -13,9 +13,10 @@ export default function WatchlistButton({ symbol, companyName }: Props) {
   const { user } = useAuth();
   const [inWatchlist, setInWatchlist] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [justAdded, setJustAdded] = useState(false);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !symbol) return;
     checkWatchlist();
   }, [user, symbol]);
 
@@ -32,7 +33,6 @@ export default function WatchlistButton({ symbol, companyName }: Props) {
   const toggleWatchlist = async () => {
     if (!user) return;
     setLoading(true);
-
     if (inWatchlist) {
       await supabase
         .from("watchlist")
@@ -43,12 +43,13 @@ export default function WatchlistButton({ symbol, companyName }: Props) {
     } else {
       await supabase.from("watchlist").insert({
         user_id: user.id,
-        symbol: symbol,
+        symbol,
         company_name: companyName || symbol,
       });
       setInWatchlist(true);
+      setJustAdded(true);
+      setTimeout(() => setJustAdded(false), 2000);
     }
-
     setLoading(false);
   };
 
@@ -58,16 +59,41 @@ export default function WatchlistButton({ symbol, companyName }: Props) {
     <button
       onClick={toggleWatchlist}
       disabled={loading}
-      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${
-        inWatchlist
-          ? "bg-blue-900/30 border border-blue-700 text-blue-400 hover:bg-red-900/30 hover:border-red-700 hover:text-red-400"
-          : "bg-gray-800 border border-gray-700 text-gray-400 hover:border-blue-500 hover:text-blue-400"
-      }`}
+      className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300"
+      style={{
+        background: justAdded
+          ? "rgba(0,255,136,0.15)"
+          : inWatchlist
+          ? "rgba(0,212,255,0.08)"
+          : "var(--bg-elevated)",
+        border: justAdded
+          ? "1px solid rgba(0,255,136,0.4)"
+          : inWatchlist
+          ? "1px solid rgba(0,212,255,0.3)"
+          : "1px solid var(--border-subtle)",
+        color: justAdded
+          ? "var(--green)"
+          : inWatchlist
+          ? "var(--cyan)"
+          : "var(--text-secondary)",
+        transform: loading ? "scale(0.97)" : "scale(1)",
+      }}
     >
-      {inWatchlist
-        ? <><EyeOff className="w-4 h-4" /> Watching</>
-        : <><Eye className="w-4 h-4" /> Add to Watchlist</>
-      }
+      {loading ? (
+        <div className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
+             style={{ borderColor: "var(--cyan)" }} />
+      ) : justAdded ? (
+        <Check className="w-4 h-4" />
+      ) : inWatchlist ? (
+        <EyeOff className="w-4 h-4" />
+      ) : (
+        <Eye className="w-4 h-4" />
+      )}
+      {justAdded
+        ? "Added!"
+        : inWatchlist
+        ? "Watching"
+        : "Add to Watchlist"}
     </button>
   );
 }

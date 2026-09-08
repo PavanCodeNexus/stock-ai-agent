@@ -438,3 +438,91 @@ body {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-variant-numeric: tabular-nums;
 }
+/* ── Mobile Improvements ────────────────────────────────────── */
+@media (max-width: 768px) {
+  .glass {
+    border-radius: 12px;
+  }
+
+  .btn-primary {
+    padding: 10px 18px;
+    font-size: 13px;
+  }
+
+  .input-field {
+    padding: 12px 14px;
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+
+  /* Hide desktop ticker on very small screens */
+  .ticker-content {
+    animation-duration: 20s;
+  }
+}
+
+/* ── Page transitions ───────────────────────────────────────── */
+.page-enter {
+  animation: fadeIn 0.3s ease forwards;
+}
+
+/* ── Hover card lift ────────────────────────────────────────── */
+.lift-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.lift-hover:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
+}
+
+/* ── Gradient border animation ──────────────────────────────── */
+@keyframes borderGlow {
+  0%, 100% { border-color: rgba(0,212,255,0.1); }
+  50%       { border-color: rgba(0,212,255,0.4); }
+}
+.border-animate {
+  animation: borderGlow 3s ease-in-out infinite;
+}
+
+/* ── Number flash ───────────────────────────────────────────── */
+@keyframes numberFlash {
+  0%   { opacity: 0.3; }
+  50%  { opacity: 1;   }
+  100% { opacity: 1;   }
+}
+.number-flash {
+  animation: numberFlash 0.5s ease forwards;
+}
+
+/* ── Smooth page load ───────────────────────────────────────── */
+main {
+  animation: fadeIn 0.3s ease forwards;
+}
+
+/* ── Better focus styles ────────────────────────────────────── */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+/* ── Improved glass on dark ─────────────────────────────────── */
+.glass-dark {
+  background: rgba(5, 10, 14, 0.9);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+}
+
+/* ── Scrollable table ───────────────────────────────────────── */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.table-scroll::-webkit-scrollbar {
+  height: 4px;
+}
+.table-scroll::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 2px;
+}
