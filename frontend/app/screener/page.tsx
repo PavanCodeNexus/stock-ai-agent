@@ -5,8 +5,8 @@ import { useAuth } from "../lib/AuthContext";
 import Navbar from "../components/Navbar";
 import {
   Filter, Search, TrendingUp, TrendingDown,
-  RefreshCw, Zap, Flame, TrendingDown as TDown,
-  Gem, Rocket, DollarSign, BarChart2, X
+  RefreshCw, Zap, Flame, Gem, Rocket,
+  DollarSign, BarChart2, X
 } from "lucide-react";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -42,11 +42,7 @@ const NSE_STOCKS = [
   "ASIANPAINT","MARUTI","SUNPHARMA","TITAN",
   "ULTRACEMCO","NESTLEIND","POWERGRID","NTPC",
   "ONGC","COALINDIA","BPCL","TECHM","HCLTECH",
-  "DIVISLAB","DRREDDY","CIPLA","BAJAJFINSV",
-  "BRITANNIA","DABUR","GODREJCP","HAVELLS",
-  "INDUSINDBK","JSWSTEEL","M&M","PIDILITIND",
-  "TATACONSUM","TATASTEEL","UPL","VEDL","ZOMATO",
-  "NYKAA","PAYTM","DELHIVERY","IRCTC","IRFC"
+  "DIVISLAB","DRREDDY","CIPLA"
 ];
 
 const PRESETS = [
@@ -56,17 +52,17 @@ const PRESETS = [
     color: "#00FF88",
     bg: "rgba(0,255,136,0.08)",
     border: "rgba(0,255,136,0.2)",
-    desc: "Stocks up 2%+ today",
-    filters: { minPrice:"", maxPrice:"", minPE:"", maxPE:"", minChange:"2", maxChange:"", minROE:"" }
+    desc: "Up 2%+ today",
+    filters: { minPrice:"",maxPrice:"",minPE:"",maxPE:"",minChange:"2",maxChange:"",minROE:"" }
   },
   {
     name: "Top Losers",
-    icon: TDown,
+    icon: TrendingDown,
     color: "#FF3B5C",
     bg: "rgba(255,59,92,0.08)",
     border: "rgba(255,59,92,0.2)",
-    desc: "Stocks down 2%+ today",
-    filters: { minPrice:"", maxPrice:"", minPE:"", maxPE:"", minChange:"", maxChange:"-2", minROE:"" }
+    desc: "Down 2%+ today",
+    filters: { minPrice:"",maxPrice:"",minPE:"",maxPE:"",minChange:"",maxChange:"-2",minROE:"" }
   },
   {
     name: "Undervalued",
@@ -74,8 +70,8 @@ const PRESETS = [
     color: "#00D4FF",
     bg: "rgba(0,212,255,0.08)",
     border: "rgba(0,212,255,0.2)",
-    desc: "PE Ratio below 15",
-    filters: { minPrice:"", maxPrice:"", minPE:"", maxPE:"15", minChange:"", maxChange:"", minROE:"" }
+    desc: "PE below 15",
+    filters: { minPrice:"",maxPrice:"",minPE:"",maxPE:"15",minChange:"",maxChange:"",minROE:"" }
   },
   {
     name: "High ROE",
@@ -83,8 +79,8 @@ const PRESETS = [
     color: "#7B2FFF",
     bg: "rgba(123,47,255,0.08)",
     border: "rgba(123,47,255,0.2)",
-    desc: "ROE greater than 20%",
-    filters: { minPrice:"", maxPrice:"", minPE:"", maxPE:"", minChange:"", maxChange:"", minROE:"20" }
+    desc: "ROE above 20%",
+    filters: { minPrice:"",maxPrice:"",minPE:"",maxPE:"",minChange:"",maxChange:"",minROE:"20" }
   },
   {
     name: "Mid Range",
@@ -92,8 +88,8 @@ const PRESETS = [
     color: "#FFB800",
     bg: "rgba(255,184,0,0.08)",
     border: "rgba(255,184,0,0.2)",
-    desc: "Price ₹500 - ₹2000",
-    filters: { minPrice:"500", maxPrice:"2000", minPE:"", maxPE:"", minChange:"", maxChange:"", minROE:"" }
+    desc: "₹500 - ₹2000",
+    filters: { minPrice:"500",maxPrice:"2000",minPE:"",maxPE:"",minChange:"",maxChange:"",minROE:"" }
   },
 ];
 
@@ -106,10 +102,8 @@ export default function ScreenerPage() {
   const [progress, setProgress] = useState(0);
   const [currentStock, setCurrentStock] = useState("");
   const [filters, setFilters] = useState<Filters>({
-    minPrice:"", maxPrice:"",
-    minPE:"", maxPE:"",
-    minChange:"", maxChange:"",
-    minROE:"",
+    minPrice:"",maxPrice:"",minPE:"",maxPE:"",
+    minChange:"",maxChange:"",minROE:"",
   });
   const [sortBy, setSortBy] = useState<keyof StockResult>("change_percent");
   const [sortDir, setSortDir] = useState<"asc"|"desc">("desc");
@@ -125,53 +119,63 @@ export default function ScreenerPage() {
     setScreening(true);
     setResults([]);
     setProgress(0);
-    setCurrentStock("");
 
     const matched: StockResult[] = [];
 
     for (let i = 0; i < NSE_STOCKS.length; i++) {
       const symbol = NSE_STOCKS[i];
-      setProgress(Math.round(((i + 1) / NSE_STOCKS.length) * 100));
       setCurrentStock(symbol);
+      setProgress(Math.round(((i + 1) / NSE_STOCKS.length) * 100));
 
       try {
         const [priceRes, finRes] = await Promise.all([
           fetch(`${API}/api/market/price/${symbol}`),
           fetch(`${API}/api/market/financials/${symbol}`),
         ]);
+
+        if (!priceRes.ok || !finRes.ok) continue;
+
         const price = await priceRes.json();
         const fin   = await finRes.json();
-        if (price.error) continue;
+
+        if (!price || price.error || !price.current_price) continue;
 
         const stock: StockResult = {
           symbol,
           company_name:  price.company_name || symbol,
-          current_price: price.current_price || 0,
-          change_percent:price.change_percent || 0,
-          pe_ratio:      price.pe_ratio || fin?.valuation?.pe_ratio || 0,
-          market_cap:    price.market_cap || 0,
-          volume:        price.volume || 0,
-          week_52_high:  price["52_week_high"] || 0,
-          week_52_low:   price["52_week_low"]  || 0,
-          profit_margin: (fin?.profitability?.profit_margin || 0) * 100,
-          roe:           (fin?.profitability?.roe || 0) * 100,
+          current_price: Number(price.current_price) || 0,
+          change_percent:Number(price.change_percent) || 0,
+          pe_ratio:      Number(price.pe_ratio) || Number(fin?.valuation?.pe_ratio) || 0,
+          market_cap:    Number(price.market_cap) || 0,
+          volume:        Number(price.volume) || 0,
+          week_52_high:  Number(price["52_week_high"]) || 0,
+          week_52_low:   Number(price["52_week_low"]) || 0,
+          profit_margin: (Number(fin?.profitability?.profit_margin) || 0) * 100,
+          roe:           (Number(fin?.profitability?.roe) || 0) * 100,
         };
 
-        if (f.minPrice   && stock.current_price < parseFloat(f.minPrice))   continue;
-        if (f.maxPrice   && stock.current_price > parseFloat(f.maxPrice))   continue;
-        if (f.minPE      && stock.pe_ratio < parseFloat(f.minPE))           continue;
-        if (f.maxPE      && (stock.pe_ratio <= 0 || stock.pe_ratio > parseFloat(f.maxPE))) continue;
-        if (f.minChange  && stock.change_percent < parseFloat(f.minChange)) continue;
-        if (f.maxChange  && stock.change_percent > parseFloat(f.maxChange)) continue;
-        if (f.minROE     && stock.roe < parseFloat(f.minROE))               continue;
+        // Apply filters
+        if (f.minPrice  && stock.current_price < parseFloat(f.minPrice))  continue;
+        if (f.maxPrice  && stock.current_price > parseFloat(f.maxPrice))  continue;
+        if (f.minPE     && stock.pe_ratio < parseFloat(f.minPE))          continue;
+        if (f.maxPE     && (stock.pe_ratio <= 0 || stock.pe_ratio > parseFloat(f.maxPE))) continue;
+        if (f.minChange && stock.change_percent < parseFloat(f.minChange)) continue;
+        if (f.maxChange && stock.change_percent > parseFloat(f.maxChange)) continue;
+        if (f.minROE    && stock.roe < parseFloat(f.minROE))              continue;
 
         matched.push(stock);
         setResults([...matched]);
-      } catch { continue; }
+      } catch {
+        continue;
+      }
+
+      // Small delay to avoid rate limiting
+      await new Promise((r) => setTimeout(r, 200));
     }
 
     setScreening(false);
     setCurrentStock("");
+    setProgress(100);
   };
 
   const handlePreset = (preset: typeof PRESETS[0]) => {
@@ -199,15 +203,11 @@ export default function ScreenerPage() {
   };
 
   const SortBtn = ({ col, label }: { col: keyof StockResult; label: string }) => (
-    <button
-      onClick={() => handleSort(col)}
-      className="flex items-center gap-1 transition-colors hover:text-white"
-    >
+    <button onClick={() => handleSort(col)}
+            className="flex items-center gap-1 transition-colors hover:text-white">
       {label}
       {sortBy === col && (
-        <span style={{ color: "var(--cyan)" }}>
-          {sortDir === "asc" ? "↑" : "↓"}
-        </span>
+        <span style={{ color: "var(--cyan)" }}>{sortDir === "asc" ? "↑" : "↓"}</span>
       )}
     </button>
   );
@@ -218,10 +218,9 @@ export default function ScreenerPage() {
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-primary)" }}>
       <Navbar />
-
       <div className="max-w-7xl mx-auto px-4 py-6">
 
-        {/* ── Header ── */}
+        {/* Header */}
         <div className="mb-6 animate-fadeIn">
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <Filter className="w-6 h-6" style={{ color: "var(--purple)" }} />
@@ -232,7 +231,7 @@ export default function ScreenerPage() {
           </p>
         </div>
 
-        {/* ── Preset Cards ── */}
+        {/* Preset Cards */}
         <div className="mb-6 animate-fadeIn">
           <p className="text-xs uppercase tracking-widest font-medium mb-3 flex items-center gap-2"
              style={{ color: "var(--text-muted)" }}>
@@ -256,18 +255,6 @@ export default function ScreenerPage() {
                     boxShadow: isActive ? `0 0 20px ${preset.color}20` : "none",
                     opacity: screening && !isActive ? 0.5 : 1,
                   }}
-                  onMouseEnter={e => {
-                    if (!isActive) {
-                      e.currentTarget.style.borderColor = preset.border;
-                      e.currentTarget.style.background = preset.bg;
-                    }
-                  }}
-                  onMouseLeave={e => {
-                    if (!isActive) {
-                      e.currentTarget.style.borderColor = "var(--border-subtle)";
-                      e.currentTarget.style.background = "var(--bg-surface)";
-                    }
-                  }}
                 >
                   <div className="w-8 h-8 rounded-lg flex items-center justify-center mb-2"
                        style={{ background: preset.bg, border: `1px solid ${preset.border}` }}>
@@ -281,13 +268,11 @@ export default function ScreenerPage() {
           </div>
         </div>
 
-        {/* ── Custom Filters ── */}
+        {/* Custom Filters */}
         <div className="glass mb-6 animate-fadeIn overflow-hidden">
           <button
             onClick={() => setShowFilters(!showFilters)}
             className="w-full flex items-center justify-between px-5 py-4 transition-all"
-            onMouseEnter={e => e.currentTarget.style.background = "rgba(0,212,255,0.03)"}
-            onMouseLeave={e => e.currentTarget.style.background = "transparent"}
           >
             <span className="text-sm font-semibold text-white flex items-center gap-2">
               <Filter className="w-4 h-4" style={{ color: "var(--cyan)" }} />
@@ -342,7 +327,7 @@ export default function ScreenerPage() {
           )}
         </div>
 
-        {/* ── Progress ── */}
+        {/* Progress */}
         {screening && (
           <div className="glass p-5 mb-6 animate-fadeIn">
             <div className="flex justify-between items-center mb-3">
@@ -362,17 +347,14 @@ export default function ScreenerPage() {
                 </span>
               </div>
             </div>
-            <div className="w-full rounded-full h-2"
-                 style={{ background: "var(--border-subtle)" }}>
-              <div
-                className="h-2 rounded-full transition-all duration-300"
-                style={{ width: `${progress}%`, background: "var(--grad-purple)" }}
-              />
+            <div className="w-full rounded-full h-2" style={{ background: "var(--border-subtle)" }}>
+              <div className="h-2 rounded-full transition-all duration-300"
+                   style={{ width: `${progress}%`, background: "var(--grad-purple)" }} />
             </div>
           </div>
         )}
 
-        {/* ── Results ── */}
+        {/* Results */}
         {results.length > 0 && (
           <div className="animate-fadeIn">
             <div className="flex items-center justify-between mb-3">
@@ -384,8 +366,6 @@ export default function ScreenerPage() {
                 onClick={() => { setResults([]); setProgress(0); setActivePreset(null); }}
                 className="text-xs flex items-center gap-1 px-3 py-1.5 rounded-lg transition-all"
                 style={{ color: "var(--text-muted)", border: "1px solid var(--border-subtle)" }}
-                onMouseEnter={e => e.currentTarget.style.color = "var(--red)"}
-                onMouseLeave={e => e.currentTarget.style.color = "var(--text-muted)"}
               >
                 <X className="w-3 h-3" /> Clear
               </button>
@@ -396,33 +376,19 @@ export default function ScreenerPage() {
               <div className="grid grid-cols-12 gap-2 px-5 py-3 text-xs uppercase tracking-widest font-medium border-b"
                    style={{ color: "var(--text-muted)", borderColor: "var(--border-subtle)" }}>
                 <div className="col-span-3">Stock</div>
-                <div className="col-span-2 text-right">
-                  <SortBtn col="current_price" label="Price" />
-                </div>
-                <div className="col-span-2 text-right">
-                  <SortBtn col="change_percent" label="Change" />
-                </div>
-                <div className="col-span-1 text-right">
-                  <SortBtn col="pe_ratio" label="PE" />
-                </div>
-                <div className="col-span-2 text-right">
-                  <SortBtn col="roe" label="ROE %" />
-                </div>
-                <div className="col-span-2 text-right">
-                  <SortBtn col="market_cap" label="Mkt Cap" />
-                </div>
+                <div className="col-span-2 text-right"><SortBtn col="current_price" label="Price" /></div>
+                <div className="col-span-2 text-right"><SortBtn col="change_percent" label="Change" /></div>
+                <div className="col-span-1 text-right"><SortBtn col="pe_ratio" label="PE" /></div>
+                <div className="col-span-2 text-right"><SortBtn col="roe" label="ROE %" /></div>
+                <div className="col-span-2 text-right"><SortBtn col="market_cap" label="Mkt Cap" /></div>
               </div>
 
-              {/* Rows */}
               {sorted.map((stock, idx) => (
                 <div
                   key={stock.symbol}
                   onClick={() => router.push(`/dashboard?symbol=${stock.symbol}`)}
-                  className="grid grid-cols-12 gap-2 px-5 py-3.5 border-b table-row items-center animate-fadeIn"
-                  style={{
-                    borderColor: "var(--border-subtle)",
-                    animationDelay: `${idx * 0.03}s`,
-                  }}
+                  className="grid grid-cols-12 gap-2 px-5 py-3.5 border-b table-row items-center"
+                  style={{ borderColor: "var(--border-subtle)" }}
                 >
                   <div className="col-span-3">
                     <p className="font-bold text-white text-sm">{stock.symbol}</p>
@@ -430,13 +396,11 @@ export default function ScreenerPage() {
                       {stock.company_name}
                     </p>
                   </div>
-
                   <div className="col-span-2 text-right">
                     <p className="text-sm font-semibold text-white number-display">
                       ₹{stock.current_price.toLocaleString("en-IN")}
                     </p>
                   </div>
-
                   <div className="col-span-2 text-right">
                     <span className={`inline-flex items-center gap-1 text-sm font-semibold ${
                       stock.change_percent >= 0 ? "positive" : "negative"
@@ -448,14 +412,12 @@ export default function ScreenerPage() {
                       {stock.change_percent.toFixed(2)}%
                     </span>
                   </div>
-
                   <div className="col-span-1 text-right">
                     <p className="text-sm number-display"
                        style={{ color: stock.pe_ratio > 0 && stock.pe_ratio < 20 ? "var(--green)" : "var(--text-secondary)" }}>
                       {stock.pe_ratio > 0 ? stock.pe_ratio.toFixed(1) : "N/A"}
                     </p>
                   </div>
-
                   <div className="col-span-2 text-right">
                     <span className="text-sm font-semibold number-display"
                           style={{
@@ -466,10 +428,8 @@ export default function ScreenerPage() {
                       {stock.roe > 0 ? `${stock.roe.toFixed(1)}%` : "N/A"}
                     </span>
                   </div>
-
                   <div className="col-span-2 text-right">
-                    <p className="text-sm number-display"
-                       style={{ color: "var(--text-secondary)" }}>
+                    <p className="text-sm number-display" style={{ color: "var(--text-secondary)" }}>
                       {fmtMktCap(stock.market_cap)}
                     </p>
                   </div>
@@ -479,7 +439,7 @@ export default function ScreenerPage() {
           </div>
         )}
 
-        {/* ── Empty State ── */}
+        {/* Empty State */}
         {!screening && results.length === 0 && progress === 0 && (
           <div className="glass p-16 text-center animate-fadeIn">
             <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
@@ -488,12 +448,9 @@ export default function ScreenerPage() {
             </div>
             <p className="text-white font-semibold mb-1">Ready to screen stocks</p>
             <p className="text-sm mb-5" style={{ color: "var(--text-muted)" }}>
-              Pick a quick screener or set custom filters
+              Pick a quick screener above or set custom filters
             </p>
-            <button
-              onClick={() => runScreener()}
-              className="btn-primary"
-            >
+            <button onClick={() => runScreener()} className="btn-primary">
               <Filter className="w-4 h-4" />
               Screen All {NSE_STOCKS.length} Stocks
             </button>

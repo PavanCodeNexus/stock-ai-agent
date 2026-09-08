@@ -4,10 +4,7 @@ import { TrendingUp, TrendingDown } from "lucide-react";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
-const TICKER_STOCKS = [
-  "TCS", "RELIANCE", "INFY", "HDFCBANK",
-  "WIPRO", "TATAMOTORS", "BAJFINANCE", "ICICIBANK"
-];
+const TICKER_STOCKS = ["TCS", "RELIANCE", "INFY", "HDFCBANK", "ICICIBANK", "WIPRO"];
 
 interface TickerItem {
   symbol: string;
@@ -21,39 +18,45 @@ export default function TickerStrip() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 60000);
+    const interval = setInterval(fetchData, 120000);
     return () => clearInterval(interval);
   }, []);
 
   const fetchData = async () => {
     try {
-      const [overviewRes, ...stockRes] = await Promise.all([
-        fetch(`${API}/api/market/overview`),
-        ...TICKER_STOCKS.map((s) =>
-          fetch(`${API}/api/market/price/${s}`)
-        ),
-      ]);
-      const overview = await overviewRes.json();
-      setMarket(overview);
-
-      const stocks = await Promise.all(stockRes.map((r) => r.json()));
-      setItems(
-        stocks
-          .filter((s) => !s.error)
-          .map((s) => ({
-            symbol: s.symbol,
-            price: s.current_price,
-            change_percent: s.change_percent,
-          }))
-      );
+      // Fetch market overview
+      const overviewRes = await fetch(`${API}/api/market/overview`);
+      if (overviewRes.ok) {
+        const overview = await overviewRes.json();
+        if (!overview.error) setMarket(overview);
+      }
     } catch {}
+
+    // Fetch stocks one by one with delay
+    const results: TickerItem[] = [];
+    for (const symbol of TICKER_STOCKS) {
+      try {
+        const res = await fetch(`${API}/api/market/price/${symbol}`);
+        if (!res.ok) continue;
+        const data = await res.json();
+        if (!data.error && data.current_price > 0) {
+          results.push({
+            symbol: data.symbol,
+            price: data.current_price,
+            change_percent: data.change_percent,
+          });
+        }
+      } catch {}
+      await new Promise((r) => setTimeout(r, 300));
+    }
+    if (results.length > 0) setItems(results);
   };
 
-  const allItems = [
-    ...(market?.nifty50
+  const allItems: TickerItem[] = [
+    ...(market?.nifty50?.value > 0
       ? [{ symbol: "NIFTY 50", price: market.nifty50.value, change_percent: market.nifty50.change_percent }]
       : []),
-    ...(market?.sensex
+    ...(market?.sensex?.value > 0
       ? [{ symbol: "SENSEX", price: market.sensex.value, change_percent: market.sensex.change_percent }]
       : []),
     ...items,
@@ -77,13 +80,13 @@ export default function TickerStrip() {
               ₹{item.price?.toLocaleString("en-IN")}
             </span>
             <span className={`text-xs font-medium flex items-center gap-0.5 ${
-              item.change_percent >= 0 ? "positive" : "negative"
+              (item.change_percent ?? 0) >= 0 ? "positive" : "negative"
             }`}>
-              {item.change_percent >= 0
+              {(item.change_percent ?? 0) >= 0
                 ? <TrendingUp className="w-3 h-3" />
                 : <TrendingDown className="w-3 h-3" />}
-              {item.change_percent >= 0 ? "+" : ""}
-              {item.change_percent?.toFixed(2)}%
+              {(item.change_percent ?? 0) >= 0 ? "+" : ""}
+              {(item.change_percent ?? 0)?.toFixed(2)}%
             </span>
             <span className="mx-4" style={{ color: "var(--border-subtle)" }}>|</span>
           </div>

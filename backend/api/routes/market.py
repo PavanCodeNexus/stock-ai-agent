@@ -83,3 +83,26 @@ async def get_financials(symbol: str):
 async def get_company(symbol: str):
     """Get company info"""
     return Financials.get_company_info(symbol)
+
+from fastapi import APIRouter
+from typing import List
+import asyncio
+import httpx
+
+@router.get("/bulk-price")
+async def get_bulk_price(symbols: str):
+    """
+    Get prices for multiple stocks at once
+    symbols = comma separated e.g. TCS,RELIANCE,INFY
+    """
+    symbol_list = [s.strip().upper() for s in symbols.split(",") if s.strip()][:20]
+
+    results = []
+    for symbol in symbol_list:
+        try:
+            data = MarketData.get_current_price(symbol)
+            results.append(data)
+        except Exception:
+            results.append({"symbol": symbol, "error": "Failed"})
+
+    return {"results": results, "count": len(results)}
