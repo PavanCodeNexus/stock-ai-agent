@@ -109,20 +109,22 @@ export default function Dashboard() {
 
       <div className="max-w-6xl mx-auto px-4 py-6">
 
-        {/* Search */}
+       {/* Search */}
 <div className="mb-8 animate-fadeIn">
-  <div className="flex gap-3">
-    <SearchAutocomplete
-      value={symbol}
-      onChange={setSymbol}
-      onSelect={(s) => setSymbol(s)}
-      onSubmit={analyzeStock}
-      placeholder="Search NSE/BSE symbol (TCS, RELIANCE, INFY...)"
-    />
+  <div className="flex gap-3 w-full">
+    <div className="flex-1 min-w-0">
+      <SearchAutocomplete
+        value={symbol}
+        onChange={setSymbol}
+        onSelect={(s) => setSymbol(s)}
+        onSubmit={analyzeStock}
+        placeholder="Search NSE/BSE symbol (TCS, RELIANCE, INFY...)"
+      />
+    </div>
     <button
       onClick={analyzeStock}
       disabled={analyzing || !symbol.trim()}
-      className="btn-primary px-6 whitespace-nowrap"
+      className="btn-primary px-5 whitespace-nowrap flex-shrink-0"
     >
       {analyzing
         ? <><RefreshCw className="w-4 h-4 animate-spin" />Analyzing...</>

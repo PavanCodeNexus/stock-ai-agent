@@ -143,56 +143,60 @@ export default function LoginPage() {
               Sign in to your account
             </p>
 
-            <form onSubmit={handleLogin} className="space-y-5">
-              {/* Email */}
-              <div>
-                <label className="text-sm font-medium block mb-2"
-                       style={{ color: "var(--text-secondary)" }}>
-                  Email address
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4"
-                        style={{ color: "var(--text-muted)" }} />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    required
-                    className="input-field pl-11"
-                  />
-                </div>
-              </div>
+            <form onSubmit={handleLogin} className="space-y-6">
+  {/* Email */}
+  <div>
+    <label className="text-sm font-medium block mb-2"
+           style={{ color: "var(--text-secondary)" }}>
+      Email address
+    </label>
+    <div className="relative">
+      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4"
+            style={{ color: "var(--text-muted)" }} />
+      <input
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="you@example.com"
+        required
+        autoComplete="email"
+        className="input-field pl-11"
+      />
+    </div>
+  </div>
 
-              {/* Password */}
-              <div>
-                <label className="text-sm font-medium block mb-2"
-                       style={{ color: "var(--text-secondary)" }}>
-                  Password
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4"
-                        style={{ color: "var(--text-muted)" }} />
-                  <input
-                    type={showPass ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    required
-                    className="input-field pl-11 pr-11"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPass(!showPass)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 transition-colors"
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    {showPass
-                      ? <EyeOff className="w-4 h-4" />
-                      : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
+  {/* Password */}
+  <div>
+    <div className="flex items-center justify-between mb-2">
+      <label className="text-sm font-medium"
+             style={{ color: "var(--text-secondary)" }}>
+        Password
+      </label>
+    </div>
+    <div className="relative">
+      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4"
+            style={{ color: "var(--text-muted)" }} />
+      <input
+        type={showPass ? "text" : "password"}
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="••••••••"
+        required
+        autoComplete="current-password"
+        className="input-field pl-11 pr-11"
+      />
+      <button
+        type="button"
+        onClick={() => setShowPass(!showPass)}
+        className="absolute right-4 top-1/2 -translate-y-1/2 transition-colors"
+        style={{ color: "var(--text-muted)" }}
+      >
+        {showPass
+          ? <EyeOff className="w-4 h-4" />
+          : <Eye className="w-4 h-4" />}
+      </button>
+    </div>
+  </div>
 
               {/* Error */}
               {error && (

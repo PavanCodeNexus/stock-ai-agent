@@ -49,7 +49,10 @@ export default function TickerStrip() {
       } catch {}
       await new Promise((r) => setTimeout(r, 300));
     }
-    if (results.length > 0) setItems(results);
+    if (results.length > 0)
+       setItems(
+  results.filter((s) => s.price > 0)
+);
   };
 
   const allItems: TickerItem[] = [

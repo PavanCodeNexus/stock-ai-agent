@@ -221,15 +221,83 @@ export default function ScreenerPage() {
       <div className="max-w-7xl mx-auto px-4 py-6">
 
         {/* Header */}
-        <div className="mb-6 animate-fadeIn">
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Filter className="w-6 h-6" style={{ color: "var(--purple)" }} />
-            Stock Screener
-          </h1>
-          <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-            Filter {NSE_STOCKS.length} NSE stocks with custom criteria
-          </p>
-        </div>
+<div className="flex items-center gap-2 px-5 py-3 text-xs uppercase tracking-widest font-medium border-b"
+     style={{ color: "var(--text-muted)", borderColor: "var(--border-subtle)" }}>
+  <div style={{ width: "25%" }}>Stock</div>
+  <div style={{ width: "15%", textAlign: "right" }}>
+    <SortBtn col="current_price" label="Price" />
+  </div>
+  <div style={{ width: "15%", textAlign: "right" }}>
+    <SortBtn col="change_percent" label="Change" />
+  </div>
+  <div style={{ width: "10%", textAlign: "right" }}>
+    <SortBtn col="pe_ratio" label="PE" />
+  </div>
+  <div style={{ width: "15%", textAlign: "right" }}>
+    <SortBtn col="roe" label="ROE %" />
+  </div>
+  <div style={{ width: "20%", textAlign: "right" }}>
+    <SortBtn col="market_cap" label="Mkt Cap" />
+  </div>
+</div>
+
+{/* Rows */}
+{sorted.map((stock) => (
+  <div
+    key={stock.symbol}
+    onClick={() => router.push(`/dashboard?symbol=${stock.symbol}`)}
+    className="flex items-center gap-2 px-5 py-3.5 border-b table-row"
+    style={{ borderColor: "var(--border-subtle)" }}
+  >
+    <div style={{ width: "25%" }}>
+      <p className="font-bold text-white text-sm">{stock.symbol}</p>
+      <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>
+        {stock.company_name}
+      </p>
+    </div>
+    <div style={{ width: "15%", textAlign: "right" }}>
+      <p className="text-sm font-semibold text-white number-display">
+        ₹{stock.current_price.toLocaleString("en-IN")}
+      </p>
+    </div>
+    <div style={{ width: "15%", textAlign: "right" }}>
+      <span className={`inline-flex items-center justify-end gap-1 text-sm font-semibold ${
+        stock.change_percent >= 0 ? "positive" : "negative"
+      }`}>
+        {stock.change_percent >= 0
+          ? <TrendingUp className="w-3 h-3" />
+          : <TrendingDown className="w-3 h-3" />}
+        {stock.change_percent >= 0 ? "+" : ""}
+        {stock.change_percent.toFixed(2)}%
+      </span>
+    </div>
+    <div style={{ width: "10%", textAlign: "right" }}>
+      <p className="text-sm number-display"
+         style={{
+           color: stock.pe_ratio > 0 && stock.pe_ratio < 20
+             ? "var(--green)" : "var(--text-secondary)"
+         }}>
+        {stock.pe_ratio > 0 ? stock.pe_ratio.toFixed(1) : "N/A"}
+      </p>
+    </div>
+    <div style={{ width: "15%", textAlign: "right" }}>
+      <span className="text-sm font-semibold number-display"
+            style={{
+              color: stock.roe > 20 ? "var(--green)"
+                   : stock.roe > 10 ? "var(--gold)"
+                   : "var(--text-secondary)",
+            }}>
+        {stock.roe > 0 ? `${stock.roe.toFixed(1)}%` : "N/A"}
+      </span>
+    </div>
+    <div style={{ width: "20%", textAlign: "right" }}>
+      <p className="text-sm number-display"
+         style={{ color: "var(--text-secondary)" }}>
+        {fmtMktCap(stock.market_cap)}
+      </p>
+    </div>
+  </div>
+))}
 
         {/* Preset Cards */}
         <div className="mb-6 animate-fadeIn">

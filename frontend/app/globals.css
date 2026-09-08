@@ -526,3 +526,7 @@ input:focus-visible {
   background: var(--border-subtle);
   border-radius: 2px;
 }
+/* Force font on nav */
+nav * {
+  font-family: 'Inter', -apple-system, sans-serif !important;
+}
