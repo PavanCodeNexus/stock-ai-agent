@@ -179,25 +179,77 @@ class Financials:
         try:
             yahoo_symbol = Financials.get_symbol(original_symbol)
             ticker = yf.Ticker(yahoo_symbol)
-            info = ticker.info
-
-            if not isinstance(info, dict):
+            info = {}
+            try:
+                raw_info = ticker.info
+                if isinstance(raw_info, dict):
+                    info = raw_info
+            except Exception:
                 info = {}
+
+            fi = getattr(ticker, "fast_info", None)
+
+            # Valuation metrics with fallbacks
+            market_cap = (
+                info.get("marketCap")
+                or (getattr(fi, "market_cap", None) if fi else None)
+            )
+            pe_ratio = (
+                info.get("trailingPE")
+                or info.get("forwardPE")
+            )
+            forward_pe = info.get("forwardPE")
+            pb_ratio = info.get("priceToBook")
+            ev_ebitda = info.get("enterpriseToEbitda")
+
+            # Profitability metrics with fallbacks
+            profit_margin = info.get("profitMargins") or info.get("operatingMargins")
+            operating_margin = info.get("operatingMargins")
+            roe = info.get("returnOnEquity")
+            roa = info.get("returnOnAssets")
+
+            # Financials statement fallback for ROE and Margin if missing
+            if (roe is None or profit_margin is None) and hasattr(ticker, "financials"):
+                try:
+                    fin = ticker.financials
+                    bs = ticker.balance_sheet
+                    if fin is not None and not fin.empty and bs is not None and not bs.empty:
+                        net_income = None
+                        for k in ["Net Income", "Net Income Common Stockholders"]:
+                            if k in fin.index:
+                                net_income = float(fin.loc[k].iloc[0])
+                                break
+                        tot_rev = None
+                        for k in ["Total Revenue", "Operating Revenue"]:
+                            if k in fin.index:
+                                tot_rev = float(fin.loc[k].iloc[0])
+                                break
+                        equity = None
+                        for k in ["Stockholders Equity", "Total Stockholder Equity", "Common Stock Equity"]:
+                            if k in bs.index:
+                                equity = float(bs.loc[k].iloc[0])
+                                break
+                        if roe is None and net_income is not None and equity and equity != 0:
+                            roe = round(net_income / equity, 4)
+                        if profit_margin is None and net_income is not None and tot_rev and tot_rev != 0:
+                            profit_margin = round(net_income / tot_rev, 4)
+                except Exception:
+                    pass
 
             result = {
                 "symbol": original_symbol,
                 "valuation": {
-                    "market_cap": safe_float(info.get("marketCap")),
-                    "pe_ratio": safe_float(info.get("trailingPE")),
-                    "forward_pe": safe_float(info.get("forwardPE")),
-                    "pb_ratio": safe_float(info.get("priceToBook")),
-                    "ev_ebitda": safe_float(info.get("enterpriseToEbitda")),
+                    "market_cap": safe_float(market_cap),
+                    "pe_ratio": safe_float(pe_ratio),
+                    "forward_pe": safe_float(forward_pe),
+                    "pb_ratio": safe_float(pb_ratio),
+                    "ev_ebitda": safe_float(ev_ebitda),
                 },
                 "profitability": {
-                    "profit_margin": safe_float(info.get("profitMargins")),
-                    "operating_margin": safe_float(info.get("operatingMargins")),
-                    "roe": safe_float(info.get("returnOnEquity")),
-                    "roa": safe_float(info.get("returnOnAssets")),
+                    "profit_margin": safe_float(profit_margin),
+                    "operating_margin": safe_float(operating_margin),
+                    "roe": safe_float(roe),
+                    "roa": safe_float(roa),
                 },
                 "growth": {
                     "revenue_growth": safe_float(info.get("revenueGrowth")),

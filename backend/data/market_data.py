@@ -118,28 +118,27 @@ class MarketData:
             day_high = info.get("dayHigh") or info.get("regularMarketDayHigh")
             day_low = info.get("dayLow") or info.get("regularMarketDayLow")
             volume = info.get("volume") or info.get("regularMarketVolume")
-            market_cap = info.get("marketCap", 0)
-            pe_ratio = info.get("trailingPE", 0)
-            week_high = info.get("fiftyTwoWeekHigh", 0)
-            week_low = info.get("fiftyTwoWeekLow", 0)
+            market_cap = info.get("marketCap")
+            pe_ratio = info.get("trailingPE") or info.get("forwardPE")
+            week_high = info.get("fiftyTwoWeekHigh")
+            week_low = info.get("fiftyTwoWeekLow")
             company_name = info.get("longName") or info.get("shortName") or clean_symbol
 
-            # 2. Fallback to fast_info if price or previous_close missing
-            if not current_price or not previous_close or not day_high:
-                try:
-                    fi = getattr(ticker, "fast_info", None)
-                    if fi:
-                        current_price = current_price or fi.get("last_price") or fi.get("regular_market_price")
-                        previous_close = previous_close or fi.get("previous_close")
-                        open_price = open_price or fi.get("open")
-                        day_high = day_high or fi.get("day_high")
-                        day_low = day_low or fi.get("day_low")
-                        volume = volume or fi.get("last_volume")
-                        market_cap = market_cap or fi.get("market_cap")
-                        week_high = week_high or fi.get("year_high")
-                        week_low = week_low or fi.get("year_low")
-                except Exception:
-                    pass
+            # 2. Extract fast_info if available for missing fields
+            try:
+                fi = getattr(ticker, "fast_info", None)
+                if fi:
+                    current_price = current_price or fi.get("last_price") or fi.get("regular_market_price")
+                    previous_close = previous_close or fi.get("previous_close")
+                    open_price = open_price or fi.get("open")
+                    day_high = day_high or fi.get("day_high")
+                    day_low = day_low or fi.get("day_low")
+                    volume = volume or fi.get("last_volume")
+                    market_cap = market_cap or fi.get("market_cap")
+                    week_high = week_high or fi.get("year_high")
+                    week_low = week_low or fi.get("year_low")
+            except Exception:
+                pass
 
             # 3. Fallback to history OHLCV if price or previous_close is still 0 / None
             if not current_price or not previous_close:

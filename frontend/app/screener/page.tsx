@@ -278,6 +278,7 @@ export default function ScreenerPage() {
   });
 
   const fmtMktCap = (v: number) => {
+    if (!v || v <= 0 || !Number.isFinite(v)) return "N/A";
     if (v >= 1e12) return `₹${(v / 1e12).toFixed(1)}T`;
     if (v >= 1e9)  return `₹${(v / 1e9).toFixed(1)}B`;
     if (v >= 1e7)  return `₹${(v / 1e7).toFixed(1)}Cr`;
