@@ -50,6 +50,8 @@ class MarketData:
     def get_symbol(symbol: str) -> str:
         """Convert plain symbol to NSE format."""
         sym = symbol.strip().upper()
+        if sym.startswith("^"):
+            return sym
         if not sym.endswith(".NS") and not sym.endswith(".BO"):
             return f"{sym}.NS"
         return sym
@@ -80,6 +82,7 @@ class MarketData:
         """
         Get current stock price.
         Cache: 60 seconds. Prevents repeated yfinance requests.
+        Robust fallback sequence: info -> fast_info -> history(5d).
         """
         clean_symbol = symbol.strip().upper()
         cache_key = f"price_{clean_symbol}"
@@ -89,35 +92,93 @@ class MarketData:
             return cached
 
         try:
-            ticker = yf.Ticker(MarketData.get_symbol(clean_symbol))
-            info = ticker.info
-
-            if not isinstance(info, dict):
+            formatted_sym = MarketData.get_symbol(clean_symbol)
+            ticker = yf.Ticker(formatted_sym)
+            
+            # 1. Try info
+            info = {}
+            try:
+                raw_info = ticker.info
+                if isinstance(raw_info, dict):
+                    info = raw_info
+            except Exception:
                 info = {}
 
-            # Current price
+            # Extract fields from info
             current_price = (
                 info.get("currentPrice")
                 or info.get("regularMarketPrice")
                 or info.get("previousClose")
-                or 0
             )
-
-            # Previous close
             previous_close = (
                 info.get("previousClose")
                 or info.get("regularMarketPreviousClose")
-                or 0
             )
+            open_price = info.get("open") or info.get("regularMarketOpen")
+            day_high = info.get("dayHigh") or info.get("regularMarketDayHigh")
+            day_low = info.get("dayLow") or info.get("regularMarketDayLow")
+            volume = info.get("volume") or info.get("regularMarketVolume")
+            market_cap = info.get("marketCap", 0)
+            pe_ratio = info.get("trailingPE", 0)
+            week_high = info.get("fiftyTwoWeekHigh", 0)
+            week_low = info.get("fiftyTwoWeekLow", 0)
+            company_name = info.get("longName") or info.get("shortName") or clean_symbol
 
-            # Clean values
+            # 2. Fallback to fast_info if price or previous_close missing
+            if not current_price or not previous_close or not day_high:
+                try:
+                    fi = getattr(ticker, "fast_info", None)
+                    if fi:
+                        current_price = current_price or fi.get("last_price") or fi.get("regular_market_price")
+                        previous_close = previous_close or fi.get("previous_close")
+                        open_price = open_price or fi.get("open")
+                        day_high = day_high or fi.get("day_high")
+                        day_low = day_low or fi.get("day_low")
+                        volume = volume or fi.get("last_volume")
+                        market_cap = market_cap or fi.get("market_cap")
+                        week_high = week_high or fi.get("year_high")
+                        week_low = week_low or fi.get("year_low")
+                except Exception:
+                    pass
+
+            # 3. Fallback to history OHLCV if price or previous_close is still 0 / None
+            if not current_price or not previous_close:
+                try:
+                    df = ticker.history(period="5d", interval="1d")
+                    if not df.empty:
+                        df = df.dropna(subset=["Close"])
+                        if len(df) >= 1:
+                            last_row = df.iloc[-1]
+                            current_price = current_price or float(last_row["Close"])
+                            day_high = day_high or float(last_row["High"])
+                            day_low = day_low or float(last_row["Low"])
+                            open_price = open_price or float(last_row["Open"])
+                            volume = volume or int(last_row["Volume"])
+                        if len(df) >= 2:
+                            previous_close = previous_close or float(df.iloc[-2]["Close"])
+                        else:
+                            previous_close = previous_close or current_price
+                except Exception:
+                    pass
+
+            # Clean all values
             current_price = MarketData._clean_value(current_price) or 0
-            previous_close = MarketData._clean_value(previous_close) or 0
+            previous_close = MarketData._clean_value(previous_close) or current_price
+            open_price = MarketData._clean_value(open_price) or current_price
+            day_high = MarketData._clean_value(day_high) or current_price
+            day_low = MarketData._clean_value(day_low) or current_price
+            market_cap = MarketData._clean_value(market_cap) or 0
+            pe_ratio = MarketData._clean_value(pe_ratio) or 0
+            week_high = MarketData._clean_value(week_high) or day_high
+            week_low = MarketData._clean_value(week_low) or day_low
 
-            # Change
+            try:
+                volume = int(float(volume))
+            except Exception:
+                volume = 0
+
+            # Change calculations
             change = round(current_price - previous_close, 2)
-
-            # Change %
             change_percent = round(
                 ((current_price - previous_close) / previous_close * 100)
                 if previous_close
@@ -125,52 +186,9 @@ class MarketData:
                 2,
             )
 
-            open_price = (
-                info.get("open")
-                or info.get("regularMarketOpen")
-                or 0
-            )
-
-            day_high = (
-                info.get("dayHigh")
-                or info.get("regularMarketDayHigh")
-                or 0
-            )
-
-            day_low = (
-                info.get("dayLow")
-                or info.get("regularMarketDayLow")
-                or 0
-            )
-
-            volume = (
-                info.get("volume")
-                or info.get("regularMarketVolume")
-                or 0
-            )
-
-            market_cap = info.get("marketCap", 0)
-            pe_ratio = info.get("trailingPE", 0)
-            week_high = info.get("fiftyTwoWeekHigh", 0)
-            week_low = info.get("fiftyTwoWeekLow", 0)
-
-            # Clean numerical values
-            open_price = MarketData._clean_value(open_price) or 0
-            day_high = MarketData._clean_value(day_high) or 0
-            day_low = MarketData._clean_value(day_low) or 0
-            market_cap = MarketData._clean_value(market_cap) or 0
-            pe_ratio = MarketData._clean_value(pe_ratio) or 0
-            week_high = MarketData._clean_value(week_high) or 0
-            week_low = MarketData._clean_value(week_low) or 0
-
-            try:
-                volume = int(float(volume))
-            except Exception:
-                volume = 0
-
             result = {
                 "symbol": clean_symbol,
-                "company_name": info.get("longName", info.get("shortName", clean_symbol)),
+                "company_name": company_name,
                 "current_price": round(current_price, 2),
                 "previous_close": round(previous_close, 2),
                 "open": round(open_price, 2),
@@ -179,8 +197,8 @@ class MarketData:
                 "volume": volume,
                 "market_cap": market_cap,
                 "pe_ratio": pe_ratio,
-                "52_week_high": week_high,
-                "52_week_low": week_low,
+                "52_week_high": round(week_high, 2),
+                "52_week_low": round(week_low, 2),
                 "change": change,
                 "change_percent": change_percent,
                 "timestamp": datetime.now().isoformat(),
@@ -322,55 +340,61 @@ class MarketData:
             return cached
 
         try:
-            nifty = yf.Ticker("^NSEI")
-            sensex = yf.Ticker("^BSESN")
-
-            nifty_info = nifty.info if isinstance(nifty.info, dict) else {}
-            sensex_info = sensex.info if isinstance(sensex.info, dict) else {}
-
-            def get_price(info):
-                return (
+            def extract_index_data(ticker_symbol: str):
+                t = yf.Ticker(ticker_symbol)
+                info = {}
+                try:
+                    if isinstance(t.info, dict):
+                        info = t.info
+                except Exception:
+                    info = {}
+                
+                price = (
                     info.get("regularMarketPrice")
                     or info.get("currentPrice")
                     or info.get("previousClose")
-                    or 0
                 )
-
-            def get_previous(info):
-                return (
+                prev = (
                     info.get("regularMarketPreviousClose")
                     or info.get("previousClose")
-                    or 0
                 )
 
-            nifty_price = MarketData._clean_value(get_price(nifty_info)) or 0
-            nifty_previous = MarketData._clean_value(get_previous(nifty_info)) or 0
+                if not price or not prev:
+                    try:
+                        fi = getattr(t, "fast_info", None)
+                        if fi:
+                            price = price or fi.get("last_price") or fi.get("regular_market_price")
+                            prev = prev or fi.get("previous_close")
+                    except Exception:
+                        pass
 
-            sensex_price = MarketData._clean_value(get_price(sensex_info)) or 0
-            sensex_previous = MarketData._clean_value(get_previous(sensex_info)) or 0
+                if not price or not prev:
+                    try:
+                        df = t.history(period="5d", interval="1d")
+                        if not df.empty:
+                            df = df.dropna(subset=["Close"])
+                            if len(df) >= 1:
+                                price = price or float(df.iloc[-1]["Close"])
+                            if len(df) >= 2:
+                                prev = prev or float(df.iloc[-2]["Close"])
+                            else:
+                                prev = prev or price
+                    except Exception:
+                        pass
 
-            def calculate_change(price, previous):
-                change = round(price - previous, 2)
-                change_percent = round(
-                    ((price - previous) / previous * 100) if previous else 0,
-                    2,
-                )
-                return change, change_percent
-
-            nifty_change, nifty_change_percent = calculate_change(nifty_price, nifty_previous)
-            sensex_change, sensex_change_percent = calculate_change(sensex_price, sensex_previous)
+                clean_p = MarketData._clean_value(price) or 0
+                clean_prev = MarketData._clean_value(prev) or clean_p
+                change = round(clean_p - clean_prev, 2)
+                change_pct = round(((clean_p - clean_prev) / clean_prev * 100) if clean_prev else 0, 2)
+                return {
+                    "value": round(clean_p, 2),
+                    "change": change,
+                    "change_percent": change_pct,
+                }
 
             result = {
-                "nifty50": {
-                    "value": round(nifty_price, 2),
-                    "change": nifty_change,
-                    "change_percent": nifty_change_percent,
-                },
-                "sensex": {
-                    "value": round(sensex_price, 2),
-                    "change": sensex_change,
-                    "change_percent": sensex_change_percent,
-                },
+                "nifty50": extract_index_data("^NSEI"),
+                "sensex": extract_index_data("^BSESN"),
                 "timestamp": datetime.now().isoformat(),
             }
 
