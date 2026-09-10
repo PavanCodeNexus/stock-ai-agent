@@ -4,10 +4,11 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "../lib/AuthContext";
 import { supabase } from "../lib/supabase";
 import Navbar from "../components/Navbar";
+import SearchAutocomplete from "../components/SearchAutocomplete";
 import {
   Briefcase, Plus, Trash2, TrendingUp,
   TrendingDown, RefreshCw, X, Sparkles,
-  ArrowUpRight, ArrowDownRight, Wallet
+  ArrowUpRight, ArrowDownRight, Wallet, Search
 } from "lucide-react";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -43,6 +44,7 @@ export default function PortfolioPage() {
   const [adding, setAdding] = useState(false);
   const [formError, setFormError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     if (!loading && !user) router.push("/login");
@@ -164,6 +166,12 @@ export default function PortfolioPage() {
     setHoldings((prev) => prev.filter((h) => h.id !== id));
   };
 
+  const filteredHoldings = holdings.filter((h) => {
+    if (!search.trim()) return true;
+    const q = search.toUpperCase().trim();
+    return h.symbol.includes(q) || h.company_name?.toLowerCase().includes(search.toLowerCase().trim());
+  });
+
   const totalInvested = holdings.reduce((s, h) => s + (h.invested_value || 0), 0);
   const totalCurrent  = holdings.reduce((s, h) => s + (h.current_value  || 0), 0);
   const totalPnL      = totalCurrent - totalInvested;
@@ -204,30 +212,36 @@ export default function PortfolioPage() {
 
         {/* ── Summary Hero ── */}
         {holdings.length > 0 && (
-          <div className="glass p-6 mb-6 animate-fadeIn"
-               style={{
-                 background: isProfit
-                   ? "linear-gradient(135deg, rgba(0,255,136,0.05), rgba(13,20,33,0.8))"
-                   : "linear-gradient(135deg, rgba(255,59,92,0.05), rgba(13,20,33,0.8))",
-                 borderColor: isProfit ? "rgba(0,255,136,0.2)" : "rgba(255,59,92,0.2)",
-               }}>
+          <div
+            className="glass p-6 mb-6 animate-fadeIn"
+            style={{
+              background: isProfit
+                ? "linear-gradient(135deg, rgba(0,255,136,0.05), rgba(13,20,33,0.8))"
+                : "linear-gradient(135deg, rgba(255,59,92,0.05), rgba(13,20,33,0.8))",
+              borderColor: isProfit ? "rgba(0,255,136,0.2)" : "rgba(255,59,92,0.2)",
+            }}
+          >
             <div className="flex flex-wrap items-center justify-between gap-6">
               {/* Total P&L */}
               <div>
-                <p className="text-xs uppercase tracking-widest mb-2"
-                   style={{ color: "var(--text-muted)" }}>
+                <p
+                  className="text-xs uppercase tracking-widest mb-2"
+                  style={{ color: "var(--text-muted)" }}
+                >
                   Total P&L
                 </p>
                 <div className="flex items-center gap-3">
                   <span className={`text-4xl font-bold number-display ${isProfit ? "positive" : "negative"}`}>
                     {isProfit ? "+" : ""}₹{Math.abs(totalPnL).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
                   </span>
-                  <div className="flex items-center gap-1 px-3 py-1 rounded-full text-sm font-bold"
-                       style={{
-                         background: isProfit ? "rgba(0,255,136,0.1)" : "rgba(255,59,92,0.1)",
-                         border: `1px solid ${isProfit ? "rgba(0,255,136,0.3)" : "rgba(255,59,92,0.3)"}`,
-                         color: isProfit ? "var(--green)" : "var(--red)",
-                       }}>
+                  <div
+                    className="flex items-center gap-1 px-3 py-1 rounded-full text-sm font-bold"
+                    style={{
+                      background: isProfit ? "rgba(0,255,136,0.1)" : "rgba(255,59,92,0.1)",
+                      border: `1px solid ${isProfit ? "rgba(0,255,136,0.3)" : "rgba(255,59,92,0.3)"}`,
+                      color: isProfit ? "var(--green)" : "var(--red)",
+                    }}
+                  >
                     {isProfit ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
                     {isProfit ? "+" : ""}{totalPnLPct.toFixed(2)}%
                   </div>
@@ -237,10 +251,10 @@ export default function PortfolioPage() {
               {/* Stats */}
               <div className="flex gap-6">
                 {[
-                  { label: "Invested",      value: `₹${totalInvested.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`, icon: Wallet      },
-                  { label: "Current Value", value: `₹${totalCurrent.toLocaleString("en-IN",  { maximumFractionDigits: 0 })}`, icon: TrendingUp  },
-                  { label: "Holdings",      value: holdings.length.toString(),                                                   icon: Briefcase  },
-                ].map(({ label, value, icon: Icon }) => (
+                  { label: "Invested",      value: `₹${totalInvested.toLocaleString("en-IN", { maximumFractionDigits: 0 })}`, icon: Wallet     },
+                  { label: "Current Value", value: `₹${totalCurrent.toLocaleString("en-IN",  { maximumFractionDigits: 0 })}`, icon: TrendingUp },
+                  { label: "Holdings",      value: holdings.length.toString(),                                                  icon: Briefcase  },
+                ].map(({ label, value }) => (
                   <div key={label} className="text-center">
                     <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>{label}</p>
                     <p className="text-lg font-bold text-white number-display">{value}</p>
@@ -251,10 +265,43 @@ export default function PortfolioPage() {
           </div>
         )}
 
+        {/* ── Search / Filter Bar for Holdings ── */}
+        {holdings.length > 0 && (
+          <div className="flex items-center justify-between gap-4 mb-4 animate-fadeIn">
+            <div className="relative flex-1 max-w-sm">
+              <Search
+                className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
+                style={{ color: "var(--text-muted)" }}
+              />
+              <input
+                type="text"
+                placeholder="Search holdings..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="input-field text-sm"
+                style={{ paddingLeft: "40px", paddingRight: search ? "36px" : "16px" }}
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded text-muted hover:text-white"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+              Showing {filteredHoldings.length} of {holdings.length} stocks
+            </p>
+          </div>
+        )}
+
         {/* ── Holdings ── */}
         {fetching ? (
           <div className="space-y-3">
-            {[1,2,3].map((i) => (
+            {[1, 2, 3].map((i) => (
               <div key={i} className="glass p-5">
                 <div className="flex justify-between">
                   <div className="space-y-2">
@@ -268,8 +315,10 @@ export default function PortfolioPage() {
           </div>
         ) : holdings.length === 0 ? (
           <div className="glass p-16 text-center animate-fadeIn">
-            <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
-                 style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)" }}>
+            <div
+              className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
+              style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)" }}
+            >
               <Briefcase className="w-8 h-8" style={{ color: "var(--text-muted)" }} />
             </div>
             <p className="text-white font-semibold mb-1">No holdings yet</p>
@@ -280,158 +329,213 @@ export default function PortfolioPage() {
               <Plus className="w-4 h-4" /> Add Stock
             </button>
           </div>
+        ) : filteredHoldings.length === 0 ? (
+          <div className="glass p-12 text-center animate-fadeIn">
+            <p className="text-white font-medium mb-1">No holdings matched &ldquo;{search}&rdquo;</p>
+            <button onClick={() => setSearch("")} className="text-xs mt-2" style={{ color: "var(--cyan)" }}>
+              Clear search
+            </button>
+          </div>
         ) : (
-          <div className="glass overflow-hidden animate-fadeIn">
-            {/* Table Header */}
-            <div className="grid grid-cols-12 gap-2 px-5 py-3 text-xs uppercase tracking-widest font-medium border-b"
-                 style={{ color: "var(--text-muted)", borderColor: "var(--border-subtle)" }}>
-              <div className="col-span-3">Stock</div>
-              <div className="col-span-1 text-right">Qty</div>
-              <div className="col-span-2 text-right">Avg Cost</div>
-              <div className="col-span-2 text-right">LTP</div>
-              <div className="col-span-2 text-right">P&L</div>
-              <div className="col-span-1 text-right">Return</div>
-              <div className="col-span-1 text-right">Action</div>
-            </div>
-            <div className="glass overflow-hidden animate-fadeIn">
-  {/* Scrollable on mobile */}
-  <div className="scroll-x">
-    <div style={{ minWidth: "700px" }}>
-      {/* Table Header + Rows */}
-    </div>
-  </div>
-</div>
+          <div className="glass overflow-hidden animate-fadeIn" style={{ overflowX: "auto" }}>
+            <div style={{ minWidth: "700px" }}>
+              {/* Table Header */}
+              <div
+                className="grid grid-cols-12 gap-2 px-5 py-3 text-xs uppercase tracking-widest font-medium border-b"
+                style={{ color: "var(--text-muted)", borderColor: "var(--border-subtle)" }}
+              >
+                <div className="col-span-3">Stock</div>
+                <div className="col-span-1 text-right">Qty</div>
+                <div className="col-span-2 text-right">Avg Cost</div>
+                <div className="col-span-2 text-right">LTP</div>
+                <div className="col-span-2 text-right">P&L</div>
+                <div className="col-span-1 text-right">Return</div>
+                <div className="col-span-1 text-right">Action</div>
+              </div>
 
-            {holdings.map((h, idx) => {
-              const isP = (h.pnl ?? 0) >= 0;
-              return (
-                <div
-                  key={h.id}
-                  className="grid grid-cols-12 gap-2 px-5 py-4 border-b items-center table-row"
-                  style={{ borderColor: "var(--border-subtle)" }}
-                >
-                  <div className="col-span-3">
-                    <p className="font-bold text-white text-sm">{h.symbol}</p>
-                    <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>
-                      {h.company_name}
-                    </p>
-                  </div>
+              {/* Table Rows */}
+              {filteredHoldings.map((h) => {
+                const isP = (h.pnl ?? 0) >= 0;
+                return (
+                  <div
+                    key={h.id}
+                    className="grid grid-cols-12 gap-2 px-5 py-4 border-b items-center table-row"
+                    style={{ borderColor: "var(--border-subtle)" }}
+                  >
+                    <div className="col-span-3">
+                      <p className="font-bold text-white text-sm">{h.symbol}</p>
+                      <p className="text-xs truncate" style={{ color: "var(--text-muted)" }}>
+                        {h.company_name}
+                      </p>
+                    </div>
 
-                  <div className="col-span-1 text-right">
-                    <p className="text-sm text-white number-display">{h.quantity}</p>
-                  </div>
+                    <div className="col-span-1 text-right">
+                      <p className="text-sm text-white number-display">{h.quantity}</p>
+                    </div>
 
-                  <div className="col-span-2 text-right">
-                    <p className="text-sm text-white number-display">
-                      ₹{h.avg_buy_price.toLocaleString("en-IN")}
-                    </p>
-                  </div>
-
-                  <div className="col-span-2 text-right">
-                    {h.loadingPrice ? (
-                      <div className="skeleton h-4 w-16 ml-auto" />
-                    ) : (
+                    <div className="col-span-2 text-right">
                       <p className="text-sm text-white number-display">
-                        ₹{h.current_price?.toLocaleString("en-IN") ?? "N/A"}
+                        ₹{h.avg_buy_price.toLocaleString("en-IN")}
                       </p>
-                    )}
-                  </div>
+                    </div>
 
-                  <div className="col-span-2 text-right">
-                    {h.loadingPrice ? (
-                      <div className="skeleton h-4 w-16 ml-auto" />
-                    ) : (
-                      <p className={`text-sm font-semibold number-display ${isP ? "positive" : "negative"}`}>
-                        {isP ? "+" : ""}₹{Math.abs(h.pnl ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
-                      </p>
-                    )}
-                  </div>
+                    <div className="col-span-2 text-right">
+                      {h.loadingPrice ? (
+                        <div className="skeleton h-4 w-16 ml-auto" />
+                      ) : (
+                        <p className="text-sm text-white number-display">
+                          ₹{h.current_price?.toLocaleString("en-IN") ?? "N/A"}
+                        </p>
+                      )}
+                    </div>
 
-                  <div className="col-span-1 text-right">
-                    {h.loadingPrice ? (
-                      <div className="skeleton h-4 w-12 ml-auto" />
-                    ) : (
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${isP ? "positive" : "negative"}`}
-                            style={{ background: isP ? "rgba(0,255,136,0.1)" : "rgba(255,59,92,0.1)" }}>
-                        {isP ? "+" : ""}{(h.pnl_percent ?? 0).toFixed(1)}%
-                      </span>
-                    )}
-                  </div>
+                    <div className="col-span-2 text-right">
+                      {h.loadingPrice ? (
+                        <div className="skeleton h-4 w-16 ml-auto" />
+                      ) : (
+                        <p className={`text-sm font-semibold number-display ${isP ? "positive" : "negative"}`}>
+                          {isP ? "+" : ""}₹{Math.abs(h.pnl ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                        </p>
+                      )}
+                    </div>
 
-                  <div className="col-span-1 flex justify-end gap-1">
-                    <button
-                      onClick={() => router.push(`/dashboard?symbol=${h.symbol}`)}
-                      className="p-1.5 rounded-lg transition-all"
-                      style={{ color: "var(--text-muted)" }}
-                      onMouseEnter={e => { e.currentTarget.style.color = "var(--cyan)"; e.currentTarget.style.background = "rgba(0,212,255,0.08)"; }}
-                      onMouseLeave={e => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "transparent"; }}
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => removeHolding(h.id)}
-                      className="p-1.5 rounded-lg transition-all"
-                      style={{ color: "var(--text-muted)" }}
-                      onMouseEnter={e => { e.currentTarget.style.color = "var(--red)"; e.currentTarget.style.background = "rgba(255,59,92,0.08)"; }}
-                      onMouseLeave={e => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "transparent"; }}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="col-span-1 text-right">
+                      {h.loadingPrice ? (
+                        <div className="skeleton h-4 w-12 ml-auto" />
+                      ) : (
+                        <span
+                          className={`text-xs font-bold px-2 py-0.5 rounded-full ${isP ? "positive" : "negative"}`}
+                          style={{ background: isP ? "rgba(0,255,136,0.1)" : "rgba(255,59,92,0.1)" }}
+                        >
+                          {isP ? "+" : ""}{(h.pnl_percent ?? 0).toFixed(1)}%
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="col-span-1 flex justify-end gap-1">
+                      <button
+                        onClick={() => router.push(`/dashboard?symbol=${h.symbol}`)}
+                        className="p-1.5 rounded-lg transition-all"
+                        style={{ color: "var(--text-muted)" }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.color = "var(--cyan)";
+                          e.currentTarget.style.background = "rgba(0,212,255,0.08)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.color = "var(--text-muted)";
+                          e.currentTarget.style.background = "transparent";
+                        }}
+                        title="Analyze stock"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => removeHolding(h.id)}
+                        className="p-1.5 rounded-lg transition-all"
+                        style={{ color: "var(--text-muted)" }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.color = "var(--red)";
+                          e.currentTarget.style.background = "rgba(255,59,92,0.08)";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.color = "var(--text-muted)";
+                          e.currentTarget.style.background = "transparent";
+                        }}
+                        title="Remove holding"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
 
       {/* ── Add Modal ── */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4"
-             style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)" }}>
-          <div className="glass p-6 w-full max-w-md animate-scaleIn">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)" }}
+        >
+          <div className="glass p-6 w-full max-w-md animate-scaleIn relative">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
                 <Plus className="w-5 h-5" style={{ color: "var(--green)" }} />
                 Add Stock
               </h2>
-              <button onClick={() => { setShowModal(false); setFormError(""); }}
-                      className="p-1.5 rounded-lg transition-all"
-                      style={{ color: "var(--text-muted)" }}
-                      onMouseEnter={e => e.currentTarget.style.color = "white"}
-                      onMouseLeave={e => e.currentTarget.style.color = "var(--text-muted)"}>
+              <button
+                onClick={() => { setShowModal(false); setFormError(""); }}
+                className="p-1.5 rounded-lg transition-all"
+                style={{ color: "var(--text-muted)" }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "white")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <div className="space-y-4">
-              {[
-                { label: "Stock Symbol", placeholder: "e.g. TCS, RELIANCE", key: "symbol", type: "text" },
-                { label: "Quantity (shares)", placeholder: "e.g. 10", key: "quantity", type: "number" },
-                { label: "Buy Price (₹ per share)", placeholder: "e.g. 2200", key: "buy_price", type: "number" },
-              ].map(({ label, placeholder, key, type }) => (
-                <div key={key}>
-                  <label className="text-sm font-medium block mb-2"
-                         style={{ color: "var(--text-secondary)" }}>
-                    {label}
-                  </label>
-                  <input
-                    type={type}
-                    placeholder={placeholder}
-                    value={form[key as keyof AddForm]}
-                    onChange={(e) => setForm({
-                      ...form,
-                      [key]: key === "symbol" ? e.target.value.toUpperCase() : e.target.value
-                    })}
-                    className="input-field"
-                  />
-                </div>
-              ))}
+              {/* Stock Symbol with Autocomplete */}
+              <div className="relative z-30">
+                <label
+                  className="text-sm font-medium block mb-2"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  Stock Symbol
+                </label>
+                <SearchAutocomplete
+                  value={form.symbol}
+                  onChange={(val) => setForm({ ...form, symbol: val })}
+                  onSelect={(sym) => setForm({ ...form, symbol: sym })}
+                  placeholder="e.g. TCS, RELIANCE"
+                />
+              </div>
+
+              {/* Quantity */}
+              <div>
+                <label
+                  className="text-sm font-medium block mb-2"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  Quantity (shares)
+                </label>
+                <input
+                  type="number"
+                  placeholder="e.g. 10"
+                  value={form.quantity}
+                  onChange={(e) => setForm({ ...form, quantity: e.target.value })}
+                  className="input-field"
+                  style={{ paddingLeft: "16px", paddingRight: "16px" }}
+                />
+              </div>
+
+              {/* Buy Price */}
+              <div>
+                <label
+                  className="text-sm font-medium block mb-2"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  Buy Price (₹ per share)
+                </label>
+                <input
+                  type="number"
+                  placeholder="e.g. 2200"
+                  value={form.buy_price}
+                  onChange={(e) => setForm({ ...form, buy_price: e.target.value })}
+                  className="input-field"
+                  style={{ paddingLeft: "16px", paddingRight: "16px" }}
+                />
+              </div>
 
               {/* Total preview */}
               {form.symbol && form.quantity && form.buy_price && (
-                <div className="rounded-xl p-4 animate-fadeIn"
-                     style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)" }}>
+                <div
+                  className="rounded-xl p-4 animate-fadeIn"
+                  style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)" }}
+                >
                   <div className="flex justify-between text-sm">
                     <span style={{ color: "var(--text-muted)" }}>Total Investment</span>
                     <span className="text-white font-bold number-display">
@@ -455,7 +559,9 @@ export default function PortfolioPage() {
                     <RefreshCw className="w-4 h-4 animate-spin" />
                     Adding...
                   </span>
-                ) : "Add to Portfolio →"}
+                ) : (
+                  "Add to Portfolio →"
+                )}
               </button>
             </div>
           </div>
@@ -467,10 +573,14 @@ export default function PortfolioPage() {
 
 function Loader() {
   return (
-    <div className="min-h-screen flex items-center justify-center"
-         style={{ background: "var(--bg-primary)" }}>
-      <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin"
-           style={{ borderColor: "var(--cyan)" }} />
+    <div
+      className="min-h-screen flex items-center justify-center"
+      style={{ background: "var(--bg-primary)" }}
+    >
+      <div
+        className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin"
+        style={{ borderColor: "var(--cyan)" }}
+      />
     </div>
   );
 }

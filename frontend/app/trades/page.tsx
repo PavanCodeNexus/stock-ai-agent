@@ -6,7 +6,7 @@ import { supabase } from "../lib/supabase";
 import Navbar from "../components/Navbar";
 import {
   History, TrendingUp, TrendingDown,
-  ArrowUpRight, ArrowDownRight, Search
+  ArrowUpRight, ArrowDownRight, Search, X
 } from "lucide-react";
 
 interface Trade {
@@ -49,8 +49,9 @@ export default function TradesPage() {
 
   const filtered = trades.filter((t) => {
     const matchFilter = filter === "ALL" || t.trade_type === filter;
-    const matchSearch = t.symbol.includes(search.toUpperCase()) ||
-      t.company_name?.toLowerCase().includes(search.toLowerCase());
+    const matchSearch =
+      t.symbol.includes(search.toUpperCase().trim()) ||
+      t.company_name?.toLowerCase().includes(search.toLowerCase().trim());
     return matchFilter && matchSearch;
   });
 
@@ -102,17 +103,36 @@ export default function TradesPage() {
         </div>
 
         {/* Filters */}
-        <div className="flex flex-wrap items-center gap-3 mb-5 animate-fadeIn">
+        <div className="flex flex-wrap items-center gap-3 mb-5 animate-fadeIn relative z-20">
           <div className="relative flex-1 min-w-48">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4"
-                    style={{ color: "var(--text-muted)" }} />
+            <Search
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
+              style={{ color: "var(--text-muted)" }}
+            />
             <input
               type="text"
-              placeholder="Search symbol..."
+              placeholder="Search symbol or company..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="input-field pl-10 py-2.5 text-sm"
+              className="input-field text-sm"
+              style={{
+                paddingLeft: "40px",
+                paddingRight: search ? "36px" : "16px",
+                paddingTop: "10px",
+                paddingBottom: "10px",
+              }}
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded text-muted hover:text-white"
+                style={{ color: "var(--text-muted)" }}
+                aria-label="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
           <div className="flex gap-2">
             {(["ALL", "BUY", "SELL"] as const).map((f) => (
@@ -147,7 +167,7 @@ export default function TradesPage() {
         {/* Trades List */}
         {fetching ? (
           <div className="space-y-3">
-            {[1,2,3,4].map((i) => (
+            {[1, 2, 3, 4].map((i) => (
               <div key={i} className="glass p-5">
                 <div className="flex justify-between">
                   <div className="space-y-2">
@@ -181,26 +201,32 @@ export default function TradesPage() {
                 <div className="flex items-center justify-between gap-4">
                   {/* Left */}
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                         style={{
-                           background: trade.trade_type === "BUY"
-                             ? "rgba(0,255,136,0.1)" : "rgba(255,59,92,0.1)",
-                           border: `1px solid ${trade.trade_type === "BUY"
-                             ? "rgba(0,255,136,0.3)" : "rgba(255,59,92,0.3)"}`,
-                         }}>
-                      {trade.trade_type === "BUY"
-                        ? <ArrowUpRight className="w-5 h-5" style={{ color: "var(--green)" }} />
-                        : <ArrowDownRight className="w-5 h-5" style={{ color: "var(--red)" }} />}
+                    <div
+                      className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                      style={{
+                        background: trade.trade_type === "BUY"
+                          ? "rgba(0,255,136,0.1)" : "rgba(255,59,92,0.1)",
+                        border: `1px solid ${trade.trade_type === "BUY"
+                          ? "rgba(0,255,136,0.3)" : "rgba(255,59,92,0.3)"}`,
+                      }}
+                    >
+                      {trade.trade_type === "BUY" ? (
+                        <ArrowUpRight className="w-5 h-5" style={{ color: "var(--green)" }} />
+                      ) : (
+                        <ArrowDownRight className="w-5 h-5" style={{ color: "var(--red)" }} />
+                      )}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-white">{trade.symbol}</span>
-                        <span className="text-xs px-2 py-0.5 rounded-full font-semibold"
-                              style={{
-                                background: trade.trade_type === "BUY"
-                                  ? "rgba(0,255,136,0.1)" : "rgba(255,59,92,0.1)",
-                                color: trade.trade_type === "BUY" ? "var(--green)" : "var(--red)",
-                              }}>
+                        <span
+                          className="text-xs px-2 py-0.5 rounded-full font-semibold"
+                          style={{
+                            background: trade.trade_type === "BUY"
+                              ? "rgba(0,255,136,0.1)" : "rgba(255,59,92,0.1)",
+                            color: trade.trade_type === "BUY" ? "var(--green)" : "var(--red)",
+                          }}
+                        >
                           {trade.trade_type}
                         </span>
                       </div>

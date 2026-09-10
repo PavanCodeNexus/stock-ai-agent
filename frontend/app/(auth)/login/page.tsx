@@ -184,6 +184,7 @@ export default function LoginPage() {
         required
         autoComplete="current-password"
         className="input-field pl-11 pr-11"
+        style={{ color: "white", caretColor: "var(--cyan)" }}
       />
       <button
         type="button"

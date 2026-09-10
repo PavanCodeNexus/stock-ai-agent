@@ -202,19 +202,40 @@ body {
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
   padding: 14px 16px;
-  color: var(--text-primary);
+  color: var(--text-primary) !important;
   font-size: 14px;
   font-family: 'Inter', sans-serif;
   transition: all 0.3s ease;
   outline: none;
+  display: block;
+  box-sizing: border-box;
+  -webkit-text-fill-color: var(--text-primary) !important;
+  caret-color: var(--cyan);
 }
+.input-field.pl-9 { padding-left: 2.25rem !important; }
+.input-field.pl-10 { padding-left: 2.5rem !important; }
+.input-field.pl-11 { padding-left: 2.75rem !important; }
+.input-field.pl-12 { padding-left: 3rem !important; }
+.input-field.pl-14 { padding-left: 3.5rem !important; }
+.input-field.pr-10 { padding-right: 2.5rem !important; }
+.input-field.pr-12 { padding-right: 3rem !important; }
+.input-with-icon { padding-left: 48px !important; }
+.input-with-icon-sm { padding-left: 40px !important; }
 .input-field::placeholder {
-  color: var(--text-muted);
+  color: var(--text-muted) !important;
+  -webkit-text-fill-color: var(--text-muted) !important;
+  opacity: 1;
 }
 .input-field:focus {
   border-color: var(--cyan);
   box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1);
   background: rgba(26, 35, 50, 1);
+}
+.input-field:autofill,
+.input-field:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px rgba(26, 35, 50, 0.9) inset !important;
+  -webkit-text-fill-color: var(--text-primary) !important;
+  border-color: var(--cyan) !important;
 }
 
 /* ── Cards ──────────────────────────────────────────────── */

@@ -39,14 +39,14 @@ def create_agent_graph():
 
 
 def analyze_stock(symbol: str, query: str = None) -> dict:
-    """Main function to analyze a stock with timeout"""
-    import signal
+    """Main function to analyze a stock with safe error handling"""
+    clean_symbol = symbol.strip().upper()
 
     if not query:
-        query = f"Should I invest in {symbol}?"
+        query = f"Should I invest in {clean_symbol}?"
 
     initial_state: AgentState = {
-        "symbol": symbol,
+        "symbol": clean_symbol,
         "user_query": query,
         "tasks": [],
         "price_data": {},
@@ -69,36 +69,45 @@ def analyze_stock(symbol: str, query: str = None) -> dict:
     }
 
     print("\n" + "="*60)
-    print(f"🤖 STOCK AI AGENT - Analyzing {symbol}")
+    print(f"🤖 STOCK AI AGENT - Analyzing {clean_symbol}")
     print("="*60)
 
     try:
         app = create_agent_graph()
         final_state = app.invoke(initial_state)
 
+        # Check if the pipeline accumulated fatal errors
+        pipeline_errors = final_state.get("errors", [])
+        final_report = final_state.get("final_report", "")
+
+        if not final_report and pipeline_errors:
+            error_msg = "; ".join(pipeline_errors)
+            return {
+                "error": f"AI analysis encountered errors: {error_msg}",
+                "symbol": clean_symbol,
+                "errors": pipeline_errors
+            }
+
         print("\n" + "="*60)
         print("📊 FINAL REPORT")
         print("="*60)
-        print(final_state.get('final_report', ''))
+        print(final_report)
 
         return {
-            "symbol": symbol,
-            "recommendation": final_state.get('recommendation', 'HOLD'),
+            "symbol": clean_symbol,
+            "recommendation": final_state.get('recommendation') or 'HOLD',
             "confidence": final_state.get('confidence_score', 50),
             "target_price": final_state.get('target_price', 0),
             "stop_loss": final_state.get('stop_loss', 0),
-            "final_report": final_state.get('final_report', ''),
-            "errors": final_state.get('errors', [])
+            "final_report": final_report,
+            "errors": pipeline_errors
         }
     except Exception as e:
         print(f"Agent error: {e}")
+        # Never fake a successful AI result when an exception occurs
         return {
-            "symbol": symbol,
-            "recommendation": "HOLD",
-            "confidence": 50,
-            "target_price": 0,
-            "stop_loss": 0,
-            "final_report": f"Analysis failed: {str(e)}",
+            "error": f"Analysis failed: {str(e)}",
+            "symbol": clean_symbol,
             "errors": [str(e)]
         }
 

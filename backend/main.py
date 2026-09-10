@@ -1,12 +1,13 @@
 # backend/main.py
+import os
+import time
+from collections import defaultdict
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from core.config import settings
 from api.routes.market import router as market_router
 from api.routes.analysis import router as analysis_router
-import time
-from collections import defaultdict
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -15,11 +16,25 @@ app = FastAPI(
 )
 
 # ── CORS ────────────────────────────────────────────────────
+frontend_url_env = os.getenv("FRONTEND_URL", "http://localhost:3000")
+# Parse comma-separated list of origins
+allowed_origins = [
+    url.strip() for url in frontend_url_env.split(",") if url.strip()
+]
+# Ensure local development origins are always present
+for local_origin in ["http://localhost:3000", "http://127.0.0.1:3000"]:
+    if local_origin not in allowed_origins:
+        allowed_origins.append(local_origin)
+
+allow_vercel_previews = os.getenv("ALLOW_VERCEL_PREVIEWS", "true").lower() == "true"
+vercel_origin_regex = r"https://.*\.vercel\.app" if allow_vercel_previews else None
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://*.vercel.app"],
+    allow_origins=allowed_origins,
+    allow_origin_regex=vercel_origin_regex,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
 )
 

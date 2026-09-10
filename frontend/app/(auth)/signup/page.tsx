@@ -183,7 +183,9 @@ export default function SignupPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Min 6 characters"
                   required
+                  autoComplete="new-password"
                   className="input-field pl-11 pr-11"
+                  style={{ color: "white", caretColor: "var(--cyan)" }}
                 />
                 <button
                   type="button"
