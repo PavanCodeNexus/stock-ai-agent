@@ -128,15 +128,33 @@ class MarketData:
             try:
                 fi = getattr(ticker, "fast_info", None)
                 if fi:
-                    current_price = current_price or fi.get("last_price") or fi.get("regular_market_price")
-                    previous_close = previous_close or fi.get("previous_close")
-                    open_price = open_price or fi.get("open")
-                    day_high = day_high or fi.get("day_high")
-                    day_low = day_low or fi.get("day_low")
-                    volume = volume or fi.get("last_volume")
-                    market_cap = market_cap or fi.get("market_cap")
-                    week_high = week_high or fi.get("year_high")
-                    week_low = week_low or fi.get("year_low")
+                    def _safe_fi(attr: str, key: str):
+                        try:
+                            val = getattr(fi, attr, None)
+                            if val is not None and not (isinstance(val, float) and (math.isnan(val) or math.isinf(val))):
+                                return val
+                        except Exception:
+                            pass
+                        try:
+                            val = fi.get(key)
+                            if val is not None and not (isinstance(val, float) and (math.isnan(val) or math.isinf(val))):
+                                return val
+                        except Exception:
+                            pass
+                        return None
+
+                    current_price = current_price or _safe_fi("last_price", "lastPrice") or _safe_fi("regular_market_price", "regularMarketPrice")
+                    previous_close = previous_close or _safe_fi("previous_close", "previousClose")
+                    open_price = open_price or _safe_fi("open", "open")
+                    day_high = day_high or _safe_fi("day_high", "dayHigh")
+                    day_low = day_low or _safe_fi("day_low", "dayLow")
+                    volume = volume or _safe_fi("last_volume", "lastVolume")
+                    market_cap = market_cap or _safe_fi("market_cap", "marketCap")
+                    week_high = week_high or _safe_fi("year_high", "yearHigh")
+                    week_low = week_low or _safe_fi("year_low", "yearLow")
+                    shares = _safe_fi("shares", "shares")
+                    if not market_cap and current_price and shares:
+                        market_cap = float(current_price) * float(shares)
             except Exception:
                 pass
 
@@ -157,6 +175,24 @@ class MarketData:
                             previous_close = previous_close or float(df.iloc[-2]["Close"])
                         else:
                             previous_close = previous_close or current_price
+                except Exception:
+                    pass
+
+            # 4. Fallback for PE ratio if missing or 0
+            if not pe_ratio or pe_ratio <= 0:
+                trailing_eps = info.get("trailingEps") or info.get("forwardEps")
+                if trailing_eps and trailing_eps > 0 and current_price and current_price > 0:
+                    pe_ratio = round(current_price / trailing_eps, 2)
+            if not pe_ratio or pe_ratio <= 0:
+                try:
+                    fin = getattr(ticker, "financials", None)
+                    if fin is not None and not fin.empty:
+                        for k in ["Net Income", "Net Income Common Stockholders"]:
+                            if k in fin.index:
+                                net_inc = float(fin.loc[k].iloc[0])
+                                if net_inc and net_inc > 0 and market_cap and market_cap > 0:
+                                    pe_ratio = round(market_cap / net_inc, 2)
+                                break
                 except Exception:
                     pass
 
@@ -408,4 +444,5 @@ if __name__ == "__main__":
     md = MarketData()
     print("=== TCS Price ===")
     p = md.get_current_price("TCS")
-    print(f"Price: ₹{p.get('current_price')} Change: {p.get('change_percent')}%")
+    print(f"Price: Rs.{p.get('current_price')} Change: {p.get('change_percent')}%")
+    print(f"Market Cap: Rs.{p.get('market_cap')} PE Ratio: {p.get('pe_ratio')}")

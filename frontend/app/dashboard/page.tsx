@@ -254,6 +254,14 @@ function DashboardContent() {
     return                           { color: "var(--gold)",   border: "rgba(255,184,0,0.3)",  bg: "rgba(255,184,0,0.05)",  glow: "0 0 30px rgba(255,184,0,0.15)"  };
   };
 
+  const formatMarketCap = (v?: number) => {
+    if (!v || v <= 0 || !Number.isFinite(v)) return "N/A";
+    if (v >= 1e12) return `₹${(v / 1e12).toFixed(2)}T`;
+    if (v >= 1e7)  return `₹${(v / 1e7).toLocaleString("en-IN", { maximumFractionDigits: 1 })}Cr`;
+    if (v >= 1e5)  return `₹${(v / 1e5).toLocaleString("en-IN", { maximumFractionDigits: 1 })}L`;
+    return `₹${v.toLocaleString("en-IN")}`;
+  };
+
   if (loading) return <LoadingScreen />;
   if (!user) return null;
 
@@ -474,14 +482,15 @@ function DashboardContent() {
                   <WatchlistButton symbol={searchedSymbol} companyName={price.company_name} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-2 text-sm">
                 {[
-                  { label: "Day High", value: `₹${price.day_high?.toLocaleString("en-IN")}` },
-                  { label: "Day Low",  value: `₹${price.day_low?.toLocaleString("en-IN")}` },
-                  { label: "52W High", value: `₹${price["52_week_high"]?.toLocaleString("en-IN")}` },
-                  { label: "52W Low",  value: `₹${price["52_week_low"]?.toLocaleString("en-IN")}` },
-                  { label: "Volume",   value: price.volume?.toLocaleString("en-IN") },
-                  { label: "Mkt Cap",  value: price.market_cap ? `₹${(price.market_cap / 1e12).toFixed(2)}T` : "N/A" },
+                  { label: "Day High",  value: `₹${price.day_high?.toLocaleString("en-IN")}` },
+                  { label: "Day Low",   value: `₹${price.day_low?.toLocaleString("en-IN")}` },
+                  { label: "52W High",  value: `₹${price["52_week_high"]?.toLocaleString("en-IN")}` },
+                  { label: "52W Low",   value: `₹${price["52_week_low"]?.toLocaleString("en-IN")}` },
+                  { label: "Volume",    value: price.volume?.toLocaleString("en-IN") },
+                  { label: "P/E Ratio", value: price.pe_ratio && Number(price.pe_ratio) > 0 ? Number(price.pe_ratio).toFixed(2) : "N/A" },
+                  { label: "Mkt Cap",   value: formatMarketCap(price.market_cap) },
                 ].map(({ label, value }) => (
                   <div key={label}>
                     <span style={{ color: "var(--text-muted)" }}>{label}: </span>

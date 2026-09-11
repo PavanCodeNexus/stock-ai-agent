@@ -195,10 +195,8 @@ export default function ScreenerPage() {
             return null;
           }
 
-          if (!priceRes.ok || !finRes.ok) return null;
-
-          const price = await priceRes.json();
-          const fin   = await finRes.json();
+          const price = priceRes.ok ? await priceRes.json().catch(() => null) : null;
+          const fin   = finRes.ok ? await finRes.json().catch(() => null) : null;
 
           if (isCancelledRef.current || controller.signal.aborted || scanIdRef.current !== currentScanId) {
             return null;
@@ -212,7 +210,7 @@ export default function ScreenerPage() {
             current_price:  Number(price.current_price)  || 0,
             change_percent: Number(price.change_percent) || 0,
             pe_ratio:       Number(price.pe_ratio) || Number(fin?.valuation?.pe_ratio) || 0,
-            market_cap:     Number(price.market_cap) || 0,
+            market_cap:     Number(price.market_cap) || Number(fin?.valuation?.market_cap) || 0,
             volume:         Number(price.volume)     || 0,
             week_52_high:   Number(price["52_week_high"]) || 0,
             week_52_low:    Number(price["52_week_low"])  || 0,
@@ -279,10 +277,10 @@ export default function ScreenerPage() {
 
   const fmtMktCap = (v: number) => {
     if (!v || v <= 0 || !Number.isFinite(v)) return "N/A";
-    if (v >= 1e12) return `₹${(v / 1e12).toFixed(1)}T`;
-    if (v >= 1e9)  return `₹${(v / 1e9).toFixed(1)}B`;
-    if (v >= 1e7)  return `₹${(v / 1e7).toFixed(1)}Cr`;
-    return `₹${v.toLocaleString()}`;
+    if (v >= 1e12) return `₹${(v / 1e12).toFixed(2)}T`;
+    if (v >= 1e7)  return `₹${(v / 1e7).toLocaleString("en-IN", { maximumFractionDigits: 1 })}Cr`;
+    if (v >= 1e5)  return `₹${(v / 1e5).toLocaleString("en-IN", { maximumFractionDigits: 1 })}L`;
+    return `₹${v.toLocaleString("en-IN")}`;
   };
 
   const ColHead = ({

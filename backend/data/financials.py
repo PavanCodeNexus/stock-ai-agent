@@ -193,11 +193,28 @@ class Financials:
             market_cap = (
                 info.get("marketCap")
                 or (getattr(fi, "market_cap", None) if fi else None)
+                or (fi.get("marketCap") if fi else None)
             )
+            shares = getattr(fi, "shares", None) if fi else info.get("sharesOutstanding")
+            price_val = getattr(fi, "last_price", None) if fi else (info.get("currentPrice") or info.get("regularMarketPrice"))
+            if not market_cap and shares and price_val:
+                try:
+                    market_cap = float(shares) * float(price_val)
+                except Exception:
+                    pass
+
             pe_ratio = (
                 info.get("trailingPE")
                 or info.get("forwardPE")
             )
+            if not pe_ratio or pe_ratio <= 0:
+                eps = info.get("trailingEps") or info.get("forwardEps")
+                if eps and eps > 0 and price_val and price_val > 0:
+                    try:
+                        pe_ratio = round(float(price_val) / float(eps), 2)
+                    except Exception:
+                        pass
+
             forward_pe = info.get("forwardPE")
             pb_ratio = info.get("priceToBook")
             ev_ebitda = info.get("enterpriseToEbitda")
@@ -208,8 +225,8 @@ class Financials:
             roe = info.get("returnOnEquity")
             roa = info.get("returnOnAssets")
 
-            # Financials statement fallback for ROE and Margin if missing
-            if (roe is None or profit_margin is None) and hasattr(ticker, "financials"):
+            # Financials statement fallback for ROE, Margin, and PE if missing
+            if hasattr(ticker, "financials"):
                 try:
                     fin = ticker.financials
                     bs = ticker.balance_sheet
@@ -233,6 +250,8 @@ class Financials:
                             roe = round(net_income / equity, 4)
                         if profit_margin is None and net_income is not None and tot_rev and tot_rev != 0:
                             profit_margin = round(net_income / tot_rev, 4)
+                        if (pe_ratio is None or pe_ratio <= 0) and net_income and net_income > 0 and market_cap and market_cap > 0:
+                            pe_ratio = round(float(market_cap) / float(net_income), 2)
                 except Exception:
                     pass
 
@@ -399,3 +418,4 @@ if __name__ == "__main__":
     print(f"Company: {info.get('company_name')}")
     metrics = Financials.get_key_metrics(sym)
     print(f"PE Ratio: {metrics.get('valuation', {}).get('pe_ratio')}")
+    print(f"Market Cap: {metrics.get('valuation', {}).get('market_cap')}")
