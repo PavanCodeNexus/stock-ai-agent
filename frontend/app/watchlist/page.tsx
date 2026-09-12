@@ -118,8 +118,8 @@ export default function WatchlistPage() {
     setRefreshing(false);
   };
 
-  const addToWatchlist = async () => {
-    const raw = addSymbol.trim();
+  const addToWatchlist = async (stockSymbol?: string, compName?: string) => {
+    const raw = (typeof stockSymbol === "string" && stockSymbol.trim() ? stockSymbol : addSymbol).trim();
     if (!raw || !user) return;
     setError("");
 
@@ -169,10 +169,10 @@ export default function WatchlistPage() {
         return;
       }
 
-      // Determine robust company name from response or autocomplete selection
+      // Determine robust company name from response, argument, or autocomplete selection
       const resolvedCompanyName = (data.company_name && data.company_name !== symbol)
         ? data.company_name
-        : selectedCompanyName || symbol;
+        : (compName || selectedCompanyName || symbol);
 
       const { error: insertErr } = await supabase.from("watchlist").insert({
         user_id: user.id,
@@ -274,12 +274,14 @@ export default function WatchlistPage() {
                   setAddSymbol(sym);
                   if (name) setSelectedCompanyName(name);
                 }}
-                onSubmit={addToWatchlist}
+                onSubmit={(sym, name) => {
+                  addToWatchlist(sym, name);
+                }}
                 placeholder="Enter NSE symbol (TCS, RELIANCE...)"
               />
             </div>
             <button
-              onClick={addToWatchlist}
+              onClick={() => addToWatchlist(addSymbol, selectedCompanyName)}
               disabled={adding || !addSymbol.trim()}
               className="btn-primary px-5 whitespace-nowrap flex-shrink-0"
             >

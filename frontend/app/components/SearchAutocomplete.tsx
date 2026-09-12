@@ -45,7 +45,7 @@ interface Props {
   value: string;
   onChange: (val: string) => void;
   onSelect: (symbol: string, companyName?: string) => void;
-  onSubmit?: () => void;
+  onSubmit?: (symbol?: string, companyName?: string) => void;
   placeholder?: string;
   className?: string;
 }
@@ -92,7 +92,7 @@ export default function SearchAutocomplete({
     onChange(symbol);
     setOpen(false);
     if (onSubmit) {
-      setTimeout(() => onSubmit(), 50);
+      onSubmit(symbol, name);
     }
   };
 
@@ -135,7 +135,10 @@ export default function SearchAutocomplete({
               handleSelect(suggestions[selectedIndex].symbol, suggestions[selectedIndex].name);
             } else {
               setOpen(false);
-              if (onSubmit) onSubmit();
+              if (onSubmit) {
+                const clean = value.trim().toUpperCase();
+                if (clean) onSubmit(clean);
+              }
             }
           } else if (e.key === "Escape") {
             setOpen(false);

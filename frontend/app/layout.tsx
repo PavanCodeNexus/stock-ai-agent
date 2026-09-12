@@ -25,7 +25,3 @@ export default function RootLayout({
     </html>
   );
 }
-<body
-  className="antialiased"
-  style={{ paddingBottom: "80px" }}
-></body>
