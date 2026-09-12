@@ -48,13 +48,14 @@ class MarketData:
 
     @staticmethod
     def get_symbol(symbol: str) -> str:
-        """Convert plain symbol to NSE format."""
+        """Convert plain symbol to NSE format, handling suffixes cleanly."""
         sym = symbol.strip().upper()
         if sym.startswith("^"):
             return sym
-        if not sym.endswith(".NS") and not sym.endswith(".BO"):
-            return f"{sym}.NS"
-        return sym
+        # Strip any existing suffixes to avoid duplicate suffixes like TCS.NS.NS
+        while sym.endswith(".NS") or sym.endswith(".BO"):
+            sym = sym[:-3]
+        return f"{sym}.NS"
 
     # --------------------------------------------------------
     # VALUE CLEANING
@@ -84,7 +85,13 @@ class MarketData:
         Cache: 60 seconds. Prevents repeated yfinance requests.
         Robust fallback sequence: info -> fast_info -> history(5d).
         """
-        clean_symbol = symbol.strip().upper()
+        raw_symbol = symbol.strip().upper()
+        # Normalize symbol: strip suffixes for clean base symbol
+        base_symbol = raw_symbol
+        while base_symbol.endswith(".NS") or base_symbol.endswith(".BO"):
+            base_symbol = base_symbol[:-3]
+
+        clean_symbol = base_symbol
         cache_key = f"price_{clean_symbol}"
 
         cached = _get_cache(cache_key, ttl=60)
@@ -196,8 +203,16 @@ class MarketData:
                 except Exception:
                     pass
 
-            # Clean all values
+            # Clean values
             current_price = MarketData._clean_value(current_price) or 0
+
+            # CRITICAL VALIDATION: If current_price is 0 or missing, the stock is invalid or has no market data
+            if not current_price or current_price <= 0:
+                return {
+                    "error": f"Quote not found for symbol: {clean_symbol}",
+                    "symbol": clean_symbol,
+                }
+
             previous_close = MarketData._clean_value(previous_close) or current_price
             open_price = MarketData._clean_value(open_price) or current_price
             day_high = MarketData._clean_value(day_high) or current_price
@@ -207,10 +222,12 @@ class MarketData:
             week_high = MarketData._clean_value(week_high) or day_high
             week_low = MarketData._clean_value(week_low) or day_low
 
-            try:
-                volume = int(float(volume))
-            except Exception:
-                volume = 0
+            clean_volume = 0
+            if volume is not None:
+                try:
+                    clean_volume = int(float(volume))
+                except Exception:
+                    clean_volume = 0
 
             # Change calculations
             change = round(current_price - previous_close, 2)
@@ -224,12 +241,13 @@ class MarketData:
             result = {
                 "symbol": clean_symbol,
                 "company_name": company_name,
+                "price": round(current_price, 2),
                 "current_price": round(current_price, 2),
                 "previous_close": round(previous_close, 2),
                 "open": round(open_price, 2),
                 "day_high": round(day_high, 2),
                 "day_low": round(day_low, 2),
-                "volume": volume,
+                "volume": clean_volume,
                 "market_cap": market_cap,
                 "pe_ratio": pe_ratio,
                 "52_week_high": round(week_high, 2),
@@ -261,7 +279,10 @@ class MarketData:
         """
         Get historical OHLCV data with 120s cache.
         """
-        clean_symbol = symbol.strip().upper()
+        raw_symbol = symbol.strip().upper()
+        while raw_symbol.endswith(".NS") or raw_symbol.endswith(".BO"):
+            raw_symbol = raw_symbol[:-3]
+        clean_symbol = raw_symbol
         cache_key = f"hist_{clean_symbol}_{period}_{interval}"
 
         cached = _get_cache(cache_key, ttl=120)
@@ -293,7 +314,10 @@ class MarketData:
                     close_val = MarketData._clean_value(row.get("Close"))
                     vol_val = row.get("Volume", 0)
 
-                    if any(v is None or v <= 0 for v in [open_val, high_val, low_val, close_val]):
+                    if open_val is None or high_val is None or low_val is None or close_val is None:
+                        continue
+
+                    if open_val <= 0 or high_val <= 0 or low_val <= 0 or close_val <= 0:
                         continue
 
                     if high_val < low_val:

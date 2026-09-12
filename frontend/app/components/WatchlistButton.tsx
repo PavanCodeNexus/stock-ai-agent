@@ -15,36 +15,40 @@ export default function WatchlistButton({ symbol, companyName }: Props) {
   const [loading, setLoading] = useState(false);
   const [justAdded, setJustAdded] = useState(false);
 
+  // Normalize symbol (uppercase, strip .NS or .BO suffix)
+  const normSymbol = (symbol || "").trim().toUpperCase().replace(/\.(NS|BO)$/, "");
+
   useEffect(() => {
-    if (!user || !symbol) return;
+    if (!user || !normSymbol) return;
     checkWatchlist();
-  }, [user, symbol]);
+  }, [user, normSymbol]);
 
   const checkWatchlist = async () => {
+    if (!user || !normSymbol) return;
     const { data } = await supabase
       .from("watchlist")
       .select("id")
       .eq("user_id", user?.id)
-      .eq("symbol", symbol)
-      .single();
+      .eq("symbol", normSymbol)
+      .maybeSingle();
     setInWatchlist(!!data);
   };
 
   const toggleWatchlist = async () => {
-    if (!user) return;
+    if (!user || !normSymbol) return;
     setLoading(true);
     if (inWatchlist) {
       await supabase
         .from("watchlist")
         .delete()
         .eq("user_id", user.id)
-        .eq("symbol", symbol);
+        .eq("symbol", normSymbol);
       setInWatchlist(false);
     } else {
       await supabase.from("watchlist").insert({
         user_id: user.id,
-        symbol,
-        company_name: companyName || symbol,
+        symbol: normSymbol,
+        company_name: companyName || normSymbol,
       });
       setInWatchlist(true);
       setJustAdded(true);

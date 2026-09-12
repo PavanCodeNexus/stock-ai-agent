@@ -32,6 +32,7 @@ export default function WatchlistPage() {
   const [watchlist, setWatchlist] = useState<WatchItem[]>([]);
   const [fetching, setFetching] = useState(true);
   const [addSymbol, setAddSymbol] = useState("");
+  const [selectedCompanyName, setSelectedCompanyName] = useState("");
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
@@ -61,16 +62,39 @@ export default function WatchlistPage() {
 
   const fetchPrice = async (symbol: string) => {
     try {
-      const res = await fetch(`${API}/api/market/price/${symbol}`);
+      // Normalize symbol
+      let cleanSymbol = symbol.trim().toUpperCase();
+      while (cleanSymbol.endsWith(".NS") || cleanSymbol.endsWith(".BO")) {
+        cleanSymbol = cleanSymbol.slice(0, -3);
+      }
+      const res = await fetch(`${API}/api/market/price/${cleanSymbol}`);
       const data = await res.json();
+      
+      if (data.error || (data.current_price == null && data.price == null)) {
+        setWatchlist((prev) =>
+          prev.map((item) =>
+            item.symbol === symbol ? { ...item, loadingPrice: false } : item
+          )
+        );
+        return;
+      }
+
+      const currentPrice = data.current_price ?? data.price;
+      const changePercent = data.change_percent ?? data.changePercent;
+      const change = data.change;
+      const resolvedName = (data.company_name && data.company_name !== cleanSymbol)
+        ? data.company_name
+        : undefined;
+
       setWatchlist((prev) =>
         prev.map((item) =>
           item.symbol === symbol
             ? {
                 ...item,
-                price: data.current_price,
-                change_percent: data.change_percent,
-                change: data.change,
+                company_name: resolvedName || item.company_name,
+                price: typeof currentPrice === "number" ? currentPrice : Number(currentPrice),
+                change_percent: typeof changePercent === "number" ? changePercent : Number(changePercent),
+                change: typeof change === "number" ? change : Number(change),
                 day_high: data.day_high,
                 day_low: data.day_low,
                 loadingPrice: false,
@@ -95,17 +119,32 @@ export default function WatchlistPage() {
   };
 
   const addToWatchlist = async () => {
-    if (!addSymbol.trim() || !user) return;
-    setAdding(true);
+    const raw = addSymbol.trim();
+    if (!raw || !user) return;
     setError("");
-    const symbol = addSymbol.toUpperCase().trim();
 
+    // Normalize symbol: uppercase, strip .NS / .BO suffixes, clean illegal characters
+    let symbol = raw.toUpperCase();
+    while (symbol.endsWith(".NS") || symbol.endsWith(".BO")) {
+      symbol = symbol.slice(0, -3);
+    }
+    symbol = symbol.replace(/[^A-Z0-9&]/g, "").trim();
+
+    // Prevent incomplete/single-character inputs (NSE symbols have at least 2 characters)
+    if (symbol.length < 2) {
+      setError(`"${raw}" is not a valid NSE symbol. Please select a stock or enter a valid symbol.`);
+      return;
+    }
+
+    setAdding(true);
+
+    // Check if already in watchlist
     const { data: existing } = await supabase
       .from("watchlist")
       .select("id")
       .eq("user_id", user.id)
       .eq("symbol", symbol)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       setError(`${symbol} is already in your watchlist`);
@@ -113,25 +152,48 @@ export default function WatchlistPage() {
       return;
     }
 
+    // Validate with backend market API before saving to Supabase
     try {
       const res = await fetch(`${API}/api/market/price/${symbol}`);
-      const data = await res.json();
-      if (data.error) {
-        setError(`${symbol} not found on NSE`);
+      if (!res.ok) {
+        setError(`Failed to validate ${symbol}. Server error.`);
         setAdding(false);
         return;
       }
-      await supabase.from("watchlist").insert({
+      const data = await res.json();
+      
+      const priceVal = data.current_price ?? data.price;
+      if (data.error || priceVal == null || Number(priceVal) <= 0) {
+        setError(data.error || `Symbol "${symbol}" not found on NSE or market data unavailable.`);
+        setAdding(false);
+        return;
+      }
+
+      // Determine robust company name from response or autocomplete selection
+      const resolvedCompanyName = (data.company_name && data.company_name !== symbol)
+        ? data.company_name
+        : selectedCompanyName || symbol;
+
+      const { error: insertErr } = await supabase.from("watchlist").insert({
         user_id: user.id,
         symbol,
-        company_name: data.company_name || symbol,
+        company_name: resolvedCompanyName,
       });
+
+      if (insertErr) {
+        setError(insertErr.message || "Failed to add stock to watchlist");
+        setAdding(false);
+        return;
+      }
+
       setAddSymbol("");
+      setSelectedCompanyName("");
       fetchWatchlist();
     } catch {
-      setError("Failed to add stock");
+      setError("Failed to add stock. Please check your network connection.");
+    } finally {
+      setAdding(false);
     }
-    setAdding(false);
   };
 
   const removeFromWatchlist = async (id: string) => {
@@ -204,8 +266,14 @@ export default function WatchlistPage() {
             <div className="relative flex-1 min-w-0">
               <SearchAutocomplete
                 value={addSymbol}
-                onChange={setAddSymbol}
-                onSelect={(s) => setAddSymbol(s)}
+                onChange={(val) => {
+                  setAddSymbol(val);
+                  setSelectedCompanyName("");
+                }}
+                onSelect={(sym, name) => {
+                  setAddSymbol(sym);
+                  if (name) setSelectedCompanyName(name);
+                }}
                 onSubmit={addToWatchlist}
                 placeholder="Enter NSE symbol (TCS, RELIANCE...)"
               />
@@ -289,10 +357,10 @@ export default function WatchlistPage() {
                   <div className="flex items-center gap-6">
                     {item.loadingPrice ? (
                       <div className="skeleton h-8 w-24" />
-                    ) : item.price ? (
+                    ) : (item.price !== undefined && item.price !== null && !isNaN(item.price) && item.price > 0) ? (
                       <div className="text-right">
                         <p className="text-lg font-bold text-white number-display">
-                          ₹{item.price?.toLocaleString("en-IN")}
+                          ₹{Number(item.price).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </p>
                         <p
                           className={`text-xs font-semibold flex items-center justify-end gap-1 ${

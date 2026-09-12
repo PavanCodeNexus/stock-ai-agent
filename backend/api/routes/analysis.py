@@ -2,7 +2,7 @@
 import asyncio
 from datetime import datetime, timezone
 from typing import Optional
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from agents.graph import analyze_stock
 from core.auth import get_optional_user, get_supabase_client
 
@@ -23,6 +23,9 @@ async def analyze_async(
     user: Optional[dict] = Depends(get_optional_user)
 ):
     clean_symbol = symbol.strip().upper()
+    while clean_symbol.endswith(".NS") or clean_symbol.endswith(".BO"):
+        clean_symbol = clean_symbol[:-3]
+
     if not query:
         query = f"Should I invest in {clean_symbol}?"
 
@@ -39,6 +42,8 @@ async def analyze_async(
 @router.get("/result/{symbol}")
 async def get_result(symbol: str):
     clean_symbol = symbol.strip().upper()
+    while clean_symbol.endswith(".NS") or clean_symbol.endswith(".BO"):
+        clean_symbol = clean_symbol[:-3]
     result = analysis_cache.get(clean_symbol)
     if not result:
         return {"status": "processing", "symbol": clean_symbol}
@@ -47,13 +52,22 @@ async def get_result(symbol: str):
 
 @router.post("/analyze-sync/{symbol}")
 async def analyze_sync(
+    request: Request,
     symbol: str,
     query: Optional[str] = None,
     user: Optional[dict] = Depends(get_optional_user)
 ):
     clean_symbol = symbol.strip().upper()
+    while clean_symbol.endswith(".NS") or clean_symbol.endswith(".BO"):
+        clean_symbol = clean_symbol[:-3]
+
     if not query:
         query = f"Should I invest in {clean_symbol}?"
+
+    # Check if client disconnected before starting
+    if await request.is_disconnected():
+        print(f"[Analysis] Client disconnected before starting analysis for {clean_symbol}")
+        raise HTTPException(status_code=499, detail="Client Closed Request")
 
     # Execute analysis with timeout protection in a background thread
     try:
@@ -61,16 +75,26 @@ async def analyze_sync(
             asyncio.to_thread(analyze_stock, clean_symbol, query),
             timeout=ANALYSIS_TIMEOUT_SECONDS
         )
+    except asyncio.CancelledError:
+        print(f"[Analysis] Client cancelled request for {clean_symbol}. Suppressing report persistence.")
+        raise
     except asyncio.TimeoutError:
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail=f"Analysis timed out for {clean_symbol} after {ANALYSIS_TIMEOUT_SECONDS}s. The AI service took too long to respond."
         )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Internal analysis error: {str(e)}"
         )
+
+    # Check if client disconnected while LangGraph computation was running
+    if await request.is_disconnected():
+        print(f"[Analysis] Client disconnected during analysis for {clean_symbol}. Suppressing report persistence.")
+        raise HTTPException(status_code=499, detail="Client Closed Request")
 
     if not result or result.get("error"):
         error_msg = result.get("error") if result else "Unknown analysis error"
@@ -79,7 +103,7 @@ async def analyze_sync(
     # Store in memory cache
     analysis_cache[clean_symbol] = result
 
-    # Persist report for authenticated user (from validated JWT token, never from untrusted query param)
+    # Persist report for authenticated user only if client is still connected
     if user and user.get("id"):
         user_id = user["id"]
         try:
@@ -118,6 +142,9 @@ async def analyze_sync(
 
 def run_analysis_background(symbol: str, query: str, user_id: Optional[str] = None):
     clean_symbol = symbol.strip().upper()
+    while clean_symbol.endswith(".NS") or clean_symbol.endswith(".BO"):
+        clean_symbol = clean_symbol[:-3]
+
     try:
         result = analyze_stock(clean_symbol, query)
         analysis_cache[clean_symbol] = result

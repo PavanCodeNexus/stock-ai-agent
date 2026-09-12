@@ -7,11 +7,13 @@ const POPULAR_STOCKS = [
   { symbol: "RELIANCE",   name: "Reliance Industries"           },
   { symbol: "INFY",       name: "Infosys Limited"               },
   { symbol: "HDFCBANK",   name: "HDFC Bank"                     },
+  { symbol: "ICICIBANK",  name: "ICICI Bank"                    },
+  { symbol: "SBIN",       name: "State Bank of India"           },
+  { symbol: "ITC",        name: "ITC Limited"                   },
   { symbol: "WIPRO",      name: "Wipro Limited"                 },
   { symbol: "TATAMOTORS", name: "Tata Motors"                   },
   { symbol: "BAJFINANCE", name: "Bajaj Finance"                 },
-  { symbol: "ICICIBANK",  name: "ICICI Bank"                    },
-  { symbol: "SBIN",       name: "State Bank of India"           },
+  { symbol: "BHARTIARTL", name: "Bharti Airtel"                 },
   { symbol: "ADANIENT",   name: "Adani Enterprises"             },
   { symbol: "HINDUNILVR", name: "Hindustan Unilever"            },
   { symbol: "KOTAKBANK",  name: "Kotak Mahindra Bank"           },
@@ -42,7 +44,7 @@ const POPULAR_STOCKS = [
 interface Props {
   value: string;
   onChange: (val: string) => void;
-  onSelect: (symbol: string) => void;
+  onSelect: (symbol: string, companyName?: string) => void;
   onSubmit?: () => void;
   placeholder?: string;
   className?: string;
@@ -62,10 +64,11 @@ export default function SearchAutocomplete({
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const suggestions = value.trim().length >= 1
+  const cleanQuery = value.trim().toUpperCase();
+  const suggestions = cleanQuery.length >= 1
     ? POPULAR_STOCKS.filter(
         (s) =>
-          s.symbol.startsWith(value.toUpperCase().trim()) ||
+          s.symbol.startsWith(cleanQuery) ||
           s.name.toLowerCase().includes(value.toLowerCase().trim())
       ).slice(0, 6)
     : [];
@@ -84,8 +87,8 @@ export default function SearchAutocomplete({
     setSelectedIndex(-1);
   }, [value]);
 
-  const handleSelect = (symbol: string) => {
-    onSelect(symbol);
+  const handleSelect = (symbol: string, name?: string) => {
+    onSelect(symbol, name);
     onChange(symbol);
     setOpen(false);
     if (onSubmit) {
@@ -129,7 +132,7 @@ export default function SearchAutocomplete({
           } else if (e.key === "Enter") {
             if (selectedIndex >= 0 && suggestions[selectedIndex]) {
               e.preventDefault();
-              handleSelect(suggestions[selectedIndex].symbol);
+              handleSelect(suggestions[selectedIndex].symbol, suggestions[selectedIndex].name);
             } else {
               setOpen(false);
               if (onSubmit) onSubmit();
@@ -192,7 +195,7 @@ export default function SearchAutocomplete({
                 type="button"
                 onMouseDown={(e) => {
                   e.preventDefault();
-                  handleSelect(s.symbol);
+                  handleSelect(s.symbol, s.name);
                 }}
                 className="w-full flex items-center gap-3 px-4 py-3 text-left transition-all"
                 style={{

@@ -9,8 +9,11 @@ from data.financials import Financials
 router = APIRouter(prefix="/api/market", tags=["Market"])
 
 def validate_symbol(symbol: str) -> str:
-    """Clean and validate stock symbol"""
-    clean = re.sub(r'[^A-Z0-9&]', '', symbol.upper().strip())
+    """Clean and validate stock symbol, handling suffixes properly."""
+    sym = symbol.strip().upper()
+    while sym.endswith(".NS") or sym.endswith(".BO"):
+        sym = sym[:-3]
+    clean = re.sub(r'[^A-Z0-9&]', '', sym)
     if not clean or len(clean) > 20:
         raise ValueError(f"Invalid symbol: {symbol}")
     return clean

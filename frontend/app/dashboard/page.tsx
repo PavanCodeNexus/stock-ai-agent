@@ -18,7 +18,7 @@ const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 const POPULAR = [
   "TCS", "RELIANCE", "INFY", "HDFCBANK",
-  "WIPRO", "TATAMOTORS", "ADANIENT", "BAJFINANCE"
+  "WIPRO", "TATAMOTORS", "ADANIENT", "BAJFINANCE", "ITC"
 ];
 
 const AGENT_STEPS = [
@@ -42,6 +42,10 @@ function DashboardContent() {
   const [result, setResult] = useState<any>(null);
   const [price, setPrice] = useState<any>(null);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [cancelNotice, setCancelNotice] = useState<string | null>(null);
+
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const currentAnalysisIdRef = useRef<number>(0);
   const hasHydratedRef = useRef(false);
 
   // Load recent searches from localStorage
@@ -96,10 +100,11 @@ function DashboardContent() {
 
     const symParam = searchParams.get("symbol");
     if (symParam) {
-      setSymbol(symParam.toUpperCase());
-      setSearchedSymbol(symParam.toUpperCase());
+      const cleanParam = symParam.toUpperCase().trim();
+      setSymbol(cleanParam);
+      setSearchedSymbol(cleanParam);
       // Trigger analysis for URL parameter
-      analyzeStock(symParam.toUpperCase());
+      analyzeStock(cleanParam);
       return;
     }
 
@@ -176,37 +181,104 @@ function DashboardContent() {
     loadFromSupabase();
   }, [user, searchParams]);
 
+  // Cancel running analysis
+  const cancelAnalysis = useCallback(() => {
+    // 1. Invalidate current analysis ID to immediately discard any late-arriving responses
+    currentAnalysisIdRef.current += 1;
+
+    // 2. Abort ongoing fetch request via AbortController
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+
+    // 3. Stop UI loading and animation
+    setAnalyzing(false);
+    setCurrentStep(-1);
+
+    // 4. Show small clear message
+    setCancelNotice("Analysis cancelled.");
+
+    // 5. Existing completed analysis is preserved intact (result is NOT cleared)
+  }, []);
+
   const analyzeStock = async (stockSymbol?: string) => {
-    const sym = (stockSymbol || symbol).trim().toUpperCase();
+    const raw = (stockSymbol || symbol).trim().toUpperCase();
+    if (!raw) return;
+
+    // Normalize symbol: uppercase, strip .NS/.BO suffixes, clean characters
+    let sym = raw;
+    while (sym.endsWith(".NS") || sym.endsWith(".BO")) {
+      sym = sym.slice(0, -3);
+    }
+    sym = sym.replace(/[^A-Z0-9&]/g, "").trim();
     if (!sym) return;
 
+    // Cancel any previous ongoing request before starting a new one
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    // Create a fresh AbortController for this analysis session
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    const analysisId = ++currentAnalysisIdRef.current;
+
+    setCancelNotice(null);
     setSymbol(sym);
     setAnalyzing(true);
-    setResult(null);
-    setPrice(null);
     setCurrentStep(0);
     setSearchedSymbol(sym);
     saveRecentSearch(sym);
 
-    // Pipeline steps animation
-    for (let i = 0; i < AGENT_STEPS.length; i++) {
-      setCurrentStep(i);
-      await new Promise((r) => setTimeout(r, 700));
-    }
+    // Note: We intentionally preserve `result` here rather than setting it to null immediately,
+    // so that if the user cancels this analysis, the previous completed analysis remains visible.
 
-    let fetchedPrice = null;
-    let fetchedResult = null;
+    let fetchedPrice: any = null;
 
     try {
-      const priceRes = await fetch(`${API}/api/market/price/${sym}`);
-      if (priceRes.ok) {
-        const pd = await priceRes.json();
-        if (!pd.error) {
-          fetchedPrice = pd;
-          setPrice(pd);
+      // 1. Fetch live market price
+      try {
+        const priceRes = await fetch(`${API}/api/market/price/${sym}`, {
+          signal: controller.signal,
+        });
+        if (priceRes.ok) {
+          const pd = await priceRes.json();
+          if (currentAnalysisIdRef.current === analysisId && !pd.error) {
+            fetchedPrice = pd;
+            setPrice(pd);
+          }
+        }
+      } catch (err: any) {
+        if (err?.name === "AbortError" || currentAnalysisIdRef.current !== analysisId) {
+          return; // Analysis was cancelled
         }
       }
 
+      // 2. Pipeline steps animation (abort-aware)
+      for (let i = 0; i < AGENT_STEPS.length; i++) {
+        if (currentAnalysisIdRef.current !== analysisId || controller.signal.aborted) {
+          return; // Stop animation immediately on cancel
+        }
+        setCurrentStep(i);
+        await new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(resolve, 600);
+          controller.signal.addEventListener(
+            "abort",
+            () => {
+              clearTimeout(timer);
+              reject(new DOMException("Aborted", "AbortError"));
+            },
+            { once: true }
+          );
+        });
+      }
+
+      if (currentAnalysisIdRef.current !== analysisId || controller.signal.aborted) {
+        return; // Analysis was cancelled
+      }
+
+      // 3. AI analysis request to backend
       setCurrentStep(5);
       const token = await getToken();
       const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -219,11 +291,22 @@ function DashboardContent() {
         {
           method: "POST",
           headers,
+          signal: controller.signal,
         }
       );
+
+      // Verify analysis was not cancelled while fetch was waiting
+      if (currentAnalysisIdRef.current !== analysisId || controller.signal.aborted) {
+        return;
+      }
+
       if (analysisRes.ok) {
         const ad = await analysisRes.json();
-        fetchedResult = ad;
+        // Double-check race condition before setting state
+        if (currentAnalysisIdRef.current !== analysisId || controller.signal.aborted) {
+          return;
+        }
+        // ONLY NOW replace previous completed analysis
         setResult(ad);
 
         // Persist to localStorage for fast reload/navigation
@@ -237,14 +320,24 @@ function DashboardContent() {
         }
       } else {
         const errJson = await analysisRes.json().catch(() => null);
-        setResult({ error: errJson?.detail || "Analysis failed. Please try again." });
+        if (currentAnalysisIdRef.current === analysisId && !controller.signal.aborted) {
+          setResult({ error: errJson?.detail || "Analysis failed. Please try again." });
+        }
       }
-    } catch {
-      setResult({ error: "Cannot connect to backend. Make sure it is running on port 8000." });
+    } catch (err: any) {
+      if (err?.name === "AbortError" || currentAnalysisIdRef.current !== analysisId || controller.signal.aborted) {
+        // Intentionally cancelled by user - do NOT set error result
+        return;
+      }
+      if (currentAnalysisIdRef.current === analysisId) {
+        setResult({ error: "Cannot connect to backend. Make sure it is running on port 8000." });
+      }
+    } finally {
+      if (currentAnalysisIdRef.current === analysisId) {
+        setAnalyzing(false);
+        setCurrentStep(-1);
+      }
     }
-
-    setCurrentStep(-1);
-    setAnalyzing(false);
   };
 
   const recStyle = (rec: string) => {
@@ -271,9 +364,9 @@ function DashboardContent() {
 
       <div className="max-w-6xl mx-auto px-4 py-6">
 
-        {/* Search */}
-        <div className="mb-8 animate-fadeIn relative z-30">
-          <div className="flex gap-3 w-full">
+        {/* Search & Actions */}
+        <div className="mb-6 animate-fadeIn relative z-30">
+          <div className="flex items-center gap-3 w-full">
             <div className="flex-1 min-w-0">
               <SearchAutocomplete
                 value={symbol}
@@ -303,7 +396,55 @@ function DashboardContent() {
                 </>
               )}
             </button>
+
+            {analyzing && (
+              <button
+                type="button"
+                onClick={cancelAnalysis}
+                className="btn-secondary px-4 whitespace-nowrap flex-shrink-0 flex items-center gap-1.5 transition-all"
+                style={{
+                  border: "1px solid rgba(255, 59, 92, 0.4)",
+                  background: "rgba(255, 59, 92, 0.08)",
+                  color: "var(--red)",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "rgba(255, 59, 92, 0.18)";
+                  e.currentTarget.style.borderColor = "var(--red)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "rgba(255, 59, 92, 0.08)";
+                  e.currentTarget.style.borderColor = "rgba(255, 59, 92, 0.4)";
+                }}
+              >
+                <X className="w-4 h-4" />
+                Cancel Analysis
+              </button>
+            )}
           </div>
+
+          {/* Cancellation Notice */}
+          {cancelNotice && (
+            <div
+              className="mt-3 p-3 rounded-xl flex items-center justify-between text-xs font-medium animate-fadeIn"
+              style={{
+                background: "rgba(255, 59, 92, 0.08)",
+                border: "1px solid rgba(255, 59, 92, 0.3)",
+                color: "var(--red)",
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                <span>{cancelNotice}</span>
+              </div>
+              <button
+                onClick={() => setCancelNotice(null)}
+                className="p-1 rounded hover:text-white transition-colors"
+                title="Dismiss"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
 
           {/* Recent Searches */}
           {recentSearches.length > 0 && (
@@ -382,13 +523,18 @@ function DashboardContent() {
         {/* Agent Pipeline */}
         {analyzing && (
           <div className="glass p-6 mb-6 animate-fadeIn">
-            <div className="flex items-center gap-2 mb-4">
-              <div
-                className="w-2 h-2 rounded-full animate-pulse"
-                style={{ background: "var(--cyan)" }}
-              />
-              <span className="text-sm font-semibold text-white">
-                AI Agent Pipeline Running
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div
+                  className="w-2 h-2 rounded-full animate-pulse"
+                  style={{ background: "var(--cyan)" }}
+                />
+                <span className="text-sm font-semibold text-white">
+                  AI Agent Pipeline Running
+                </span>
+              </div>
+              <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                Step {Math.max(0, currentStep + 1)} of {AGENT_STEPS.length}
               </span>
             </div>
             <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
